@@ -1,26 +1,35 @@
 import subprocess
 import tkinter as tk
 from tkinter import messagebox
+from tkinter import ttk
 from time import sleep
 import serial
 
-class Port:
+class Station:
     def __init__(self, parent, prog_com_, out_com_):
         self.parent = parent
         self.prog_com = prog_com_
         self.out_com = out_com_
         self.frame = tk.Frame(self.parent)
-        self.initTitle()
+        self.initComponents()
         self.packObjects()
 
-    def initTitle(self):
+    def initComponents(self):
         self.instructions = tk.Label(self.frame, text = self.prog_com + "\\" + self.out_com)
         self.statusSpace = tk.LabelFrame(self.frame, width = 200, height = 250)
+        self.currentStatus = tk.Label(self.statusSpace, text = "Current Status", width = 25, pady = 10)
+        self.progressBar = ttk.Progressbar(self.statusSpace, mode = 'determinate', length = 125)
 
     def packObjects(self):
         self.instructions.pack()
         self.statusSpace.pack()
+        self.currentStatus.pack()
+        self.progressBar.pack()
         self.frame.pack(side = tk.LEFT, padx = 10)
+
+    def startUpload(self):
+        self.currentStatus.configure(text = "Starting upload...")
+        self.progressBar.start(100);
 
 def getCOMPorts():
     try:
@@ -42,21 +51,27 @@ class Application:
         self.parent = parent
         self.parent.title("CAN-232 Programmer")
         self.parent.geometry("600x400")
+        self.stations = []
         self.frame = tk.Frame(self.parent)
         self.titleLabel = tk.Label(self.frame, text = 'Details/Instructions', font = ("Times", 16))
         self.instructions = tk.Label(self.frame, text = '- Programming stations \
 are labelled with both COM ports listed in config.txt\n \
             - Click START to begin the upload and verification')
-        self.start = tk.Button(self.frame, text = "START", width = 10, height = 2);
+        self.start = tk.Button(self.frame, text = "START", width = 10, height = 2, command = self.startUpload);
         self.packObjects()
         devices = getCOMPorts()
         for d in devices:
-            Port(root, d[0], d[1])
+            self.stations.append(Station(root, d[0], d[1]))
+
     def packObjects(self):
         self.titleLabel.pack()
         self.instructions.pack()
         self.frame.pack()
         self.start.pack()
+
+    def startUpload(self):
+        for stat in self.stations:
+            stat.startUpload()
 
 if __name__ == "__main__":
     root = tk.Tk()
