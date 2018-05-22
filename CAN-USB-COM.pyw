@@ -5,6 +5,8 @@ from tkinter import ttk
 from time import sleep
 import serial
 import sys
+import time
+
 
 class Station:
     def __init__(self, parent, prog_com_, out_com_):
@@ -32,22 +34,29 @@ class Station:
         self.currentStatus.configure(text = "Configuring executables")
         self.progressBar.start(100);
         ## Configure command text file
-        with open('CANUSB_CommandFile.txt', 'r+', encoding = 'utf-8') as command:
-            command.seek(4)
-            prog_com_number = self.prog_com.split("COM")[1]
-            if(len(prog_com_number) == 1):
-                prog_com_number = '0'+prog_com_number
-            command.write(prog_com_number)
+        try:
+            with open('CANUSB_CommandFile.txt', 'r+', encoding = 'utf-8') as command:
+                command.seek(4)
+                prog_com_number = self.prog_com.split("COM")[1]
+                if(len(prog_com_number) == 1):
+                    prog_com_number = '0'+prog_com_number
+                command.write(prog_com_number)
+        except FileIO:
+            messagebox.showinfo("IOError", "Cannot open CANUSB_CommandFile.txt")
 
         ## Get magic flash commands ready
         flash_magic_cmd = "CANUSB_Flash.bat"
         try:
+            start_time = time.time()
+            self.currentStatus.configure(text = "Loading firmware")
             p = subprocess.check_output([flash_magic_cmd], shell=True, stderr=subprocess.STDOUT)
+            up_time = time.time() - start_time
             p = p.decode("utf-8")
-            #messagebox.showinfo("good", p)
+            self.progressBar.stop()
+            self.progressBar.configure(value = 100)
+            messagebox.showinfo("Upload Success!", "Firmware uploaded in " + str(up_time) + " seconds")
         except subprocess.CalledProcessError as e:
             messagebox.showinfo("bad", e.output)
-        self.currentStatus.configure(text = "Loading firmware")
 
 def getCOMPorts():
     try:
