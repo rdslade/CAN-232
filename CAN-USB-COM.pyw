@@ -4,6 +4,7 @@ from tkinter import messagebox
 from tkinter import ttk
 from time import sleep
 import serial
+import sys
 
 class Station:
     def __init__(self, parent, prog_com_, out_com_):
@@ -28,8 +29,25 @@ class Station:
         self.frame.pack(side = tk.LEFT, padx = 10)
 
     def startUpload(self):
-        self.currentStatus.configure(text = "Starting upload...")
+        self.currentStatus.configure(text = "Configuring executables")
         self.progressBar.start(100);
+        ## Configure command text file
+        with open('CANUSB_CommandFile.txt', 'r+', encoding = 'utf-8') as command:
+            command.seek(4)
+            prog_com_number = self.prog_com.split("COM")[1]
+            if(len(prog_com_number) == 1):
+                prog_com_number = '0'+prog_com_number
+            command.write(prog_com_number)
+
+        ## Get magic flash commands ready
+        flash_magic_cmd = "CANUSB_Flash.bat"
+        try:
+            p = subprocess.check_output([flash_magic_cmd], shell=True, stderr=subprocess.STDOUT)
+            p = p.decode("utf-8")
+            #messagebox.showinfo("good", p)
+        except subprocess.CalledProcessError as e:
+            messagebox.showinfo("bad", e.output)
+        self.currentStatus.configure(text = "Loading firmware")
 
 def getCOMPorts():
     try:
@@ -72,7 +90,6 @@ are labelled with both COM ports listed in config.txt\n \
     def startUpload(self):
         for stat in self.stations:
             stat.startUpload()
-
 if __name__ == "__main__":
     root = tk.Tk()
     a1 = Application(root)
