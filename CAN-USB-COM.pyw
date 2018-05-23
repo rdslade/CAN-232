@@ -26,12 +26,14 @@ class Station():
         self.statusSpace = tk.LabelFrame(self.frame, width = 200, height = 250)
         self.currentStatus = tk.Label(self.statusSpace, text = "Current Status", width = 25, pady = 10)
         self.progressBar = ttk.Progressbar(self.statusSpace, mode = 'determinate', length = 125)
+        self.explanation = tk.Label(self.statusSpace, text = "", width = 25, pady = 10)
 
     def packObjects(self):
         self.instructions.pack()
         self.statusSpace.pack()
         self.currentStatus.pack()
         self.progressBar.pack()
+        self.explanation.pack()
         self.frame.pack(side = tk.LEFT, padx = 10)
 
     def configureTextFiles(self):
@@ -58,12 +60,13 @@ class Station():
             q.put(subprocess.check_output([flash_magic_cmd], shell=True, stderr=subprocess.STDOUT))
             self.stopProgressBar(1)
             self.currentStatus.configure(text = "SUCCESS")
-            return time.time() - start_time
+            up_time = time.time() - start_time
+            self.explanation.configure(text = "Uploaded in " + str(round(up_time, 2)) + " seconds")
 
         except subprocess.CalledProcessError as e:
             self.stopProgressBar(0)
             self.currentStatus.configure(text = "FAIL")
-            return 0
+            self.explanation.configure(text = "Could not open " + self.prog_com)
 
 
     def stopProgressBar(self, success):
@@ -73,12 +76,15 @@ class Station():
         else:
             self.progressBar.configure(value = 100, style = "red.Horizontal.TProgressbar")
 
+    def restartProgressBar(self):
+        self.progressBar.configure(value = 0, style = "Horizontal.TProgressbar")
+        self.progressBar.start()
+
     def run(self):
-        self.progressBar.start(100)
+        self.restartProgressBar()
+        self.explanation.configure(text = "")
         self.configureTextFiles()
-        up_time = self.runFlashCommand()
-        if up_time:
-            messagebox.showinfo("Upload Success!", "Firmware uploaded in " + str(up_time) + " seconds")
+        self.runFlashCommand()
 
     def createNewThread(self):
         self.thread = threading.Thread(target = self.run)

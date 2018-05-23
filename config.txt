@@ -1,3 +1,2 @@
 Programming_COM	Output_COM
 COM23 COM21
-COM12 COM13
