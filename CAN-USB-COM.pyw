@@ -24,7 +24,7 @@ class Station():
     def initComponents(self):
         self.instructions = tk.Label(self.frame, text = self.prog_com + "\\" + self.out_com)
         self.statusSpace = tk.LabelFrame(self.frame, width = 200, height = 250)
-        self.currentStatus = tk.Label(self.statusSpace, text = "Current Status", width = 25, pady = 10)
+        self.currentStatus = tk.Label(self.statusSpace, text = "", width = 25, pady = 10)
         self.progressBar = ttk.Progressbar(self.statusSpace, mode = 'determinate', length = 125)
         self.explanation = tk.Label(self.statusSpace, text = "", width = 25, pady = 10)
 
@@ -58,20 +58,57 @@ class Station():
             start_time = time.time()
             q = Queue();
             q.put(subprocess.check_output([flash_magic_cmd], shell=True, stderr=subprocess.STDOUT))
-            self.stopProgressBar(1)
-            self.currentStatus.configure(text = "SUCCESS")
+            addTextToLabel(self.explanation, "SUCCESSFUL UPLOAD")
             up_time = time.time() - start_time
-            self.explanation.configure(text = "Uploaded in " + str(round(up_time, 2)) + " seconds")
+            addTextToLabel(self.explanation, "\nUploaded in " + str(round(up_time, 2)) + " seconds")
+            return 0
 
         except subprocess.CalledProcessError as e:
-            self.stopProgressBar(0)
+            self.stopProgressBar(1)
             self.currentStatus.configure(text = "FAIL")
-            self.explanation.configure(text = "Could not open " + self.prog_com)
+            self.explanation.configure(text = "Could not open serial port(s)")
+            return 1
 
+    def verification(self):
+        # Begin Verification
+        self.currentStatus.configure(text = "Verification Stage")
+        # Helper function for reading serial words
+        def readSerialWord(ser_port):
+            char = '0'
+            response = ""
+            while char != '':
+                char = ser_port.read().decode()
+                response += char
+            return response
+        # Open serial port
+        try:
+            with serial.Serial(self.out_com, baudrate = 115200, timeout = .1) as buttonSer:
+                addTextToLabel(self.explanation, "\n\nPress the button")
 
-    def stopProgressBar(self, success):
+                checkMode = "start"
+                while checkMode[2:] != "#0#":
+                    buttonSer.write("\n\r".encode())
+                    checkMode = readSerialWord(buttonSer)
+
+                addTextToLabel(self.explanation, "\nButton Pressed\nVerifying Firmware Version")
+
+                buttonSer.write("get version\r".encode())
+                version = readSerialWord(buttonSer)
+                buttonSer.close()
+                if "APP=2.01A" not in version:
+                    addTextToLabel(self.explanation, "\n\nWRONG FIRMWARE VERSION")
+                    self.currentStatus.configure(text = "FAIL")
+                    return 1
+                else:
+                    addTextToLabel(self.explanation, "\nSUCCESSFUL VERIFICATION")
+                    self.currentStatus.configure(text = "SUCCESS")
+                    return 0
+        except SerialException as e:
+            addTextToLabel(self.explanation, "\n\nCould not open serial port(s)")
+
+    def stopProgressBar(self, fail):
         self.progressBar.stop()
-        if success:
+        if not fail:
             self.progressBar.configure(value = 100, style = "green.Horizontal.TProgressbar")
         else:
             self.progressBar.configure(value = 100, style = "red.Horizontal.TProgressbar")
@@ -84,12 +121,15 @@ class Station():
         self.restartProgressBar()
         self.explanation.configure(text = "")
         self.configureTextFiles()
-        self.runFlashCommand()
+        fail = self.runFlashCommand()
+        if not fail:
+            self.stopProgressBar(self.verification())
 
     def createNewThread(self):
         self.thread = threading.Thread(target = self.run)
         self.thread.start()
-
+def addTextToLabel(label, textToAdd):
+    label.configure(text = label.cget("text") + textToAdd);
 def getCOMPorts():
     try:
         with open("config.txt", 'r',encoding='utf-8' ) as mp:
