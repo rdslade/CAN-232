@@ -6,6 +6,7 @@ from time import sleep
 import serial
 import sys
 import time
+import datetime
 import threading
 from multiprocessing import Queue, Process
 
@@ -18,6 +19,7 @@ class Station():
         self.prog_com = prog_com_
         self.out_com = out_com_
         self.can_com = can_com_
+        self.deviceType = "GC-CAN-USB-COM"
         self.frame = tk.Frame(self.parent)
         self.initComponents()
         self.packObjects()
@@ -86,10 +88,15 @@ class Station():
                 addTextToLabel(self.explanation, "\nButton Pressed\nVerifying Firmware Version")
                 #Confirm version
                 buttonSer.write("get version\r".encode())
-                version = readSerialWord(buttonSer)
+                self.version = readSerialWord(buttonSer).split(':')[1].split('>')[0]
+                #Get Serial prog_com_number
+                buttonSer.write("get sernum\r".encode())
+                self.sernum = readSerialWord(buttonSer).split(':')[1].split('>')[0]
+                #Exit boot mode
                 buttonSer.write("exit\r".encode())
+                #Clock Serial Port
                 buttonSer.close()
-                if "APP=2.01A" not in version:
+                if "APP=2.01A" not in self.version:
                     addTextToLabel(self.explanation, "\n\nWRONG FIRMWARE VERSION")
                     return 1
                 else:
@@ -105,7 +112,7 @@ class Station():
         try:
             num_loops = 50
             main_mod = serial.Serial(self.out_com, baudrate = 115200, timeout = .03)
-            main_mod.write("exit\r".encode()) #ensure this port is in correct mode for communication 
+            main_mod.write("exit\r".encode()) #ensure this port is in correct mode for communication
             CAN = serial.Serial(self.can_com, baudrate = 115200, timeout = .03)
             successes = 0
             for i in range(0, num_loops):
@@ -130,7 +137,24 @@ class Station():
             addTextToLabel(self.explanation, "\n\nCould not open serial port(s)")
             return 1
 
-
+    def log_run(self, flash, verify, comm):
+        full_date = str(datetime.datetime.now())
+        log_str = full_date + " "
+        if(not flash and not verify and not comm):
+            log_str += self.sernum + " " + self.version + " " + self.deviceType + " ""SUCCESS"
+            log_filename = r"Log\success.txt"
+        else:
+            log_str += "ERROR- "
+            if flash:
+                log_str += "Loading firmware"
+            if verify:
+                log_str += "Verification"
+            if comm:
+                log_str += "Communication"
+            log_filename = r"Log\fail.txt"
+        with open(log_filename, 'a+',encoding='utf-8') as log:
+            log.write(log_str)
+            log.close()
     def stopProgressBar(self, fail):
         self.progressBar.stop()
         if not fail:
@@ -146,12 +170,13 @@ class Station():
         self.restartProgressBar()
         self.explanation.configure(text = "")
         self.configureTextFiles()
-        flash_fail = verify_fail = test_fail = 1
+        flash_fail = verify_fail = test_fail = 0
         flash_fail = self.runFlashCommand()
         if not flash_fail:
             verify_fail = self.verify()
         if not flash_fail and not verify_fail:
             test_fail = self.testMessages()
+        self.log_run(flash_fail, verify_fail, test_fail)
         self.stopProgressBar(flash_fail + flash_fail + test_fail)
 
     def createNewThread(self):
