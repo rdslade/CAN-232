@@ -10,7 +10,6 @@ import datetime
 import threading
 from multiprocessing import Queue, Process
 
-
 class Station():
     def __init__(self, parent, prog_com_, out_com_, can_com_, stat_num):
         self.thread = threading.Thread(target = self.run)
@@ -141,7 +140,7 @@ class Station():
         full_date = str(datetime.datetime.now())
         log_str = full_date + " "
         if(not flash and not verify and not comm):
-            log_str += self.sernum + " " + self.version + " " + self.deviceType + " ""SUCCESS"
+            log_str += self.sernum + " " + self.version + " " + self.deviceType + "SUCCESS"
             log_filename = r"Log\success.txt"
         else:
             log_str += "ERROR- "
@@ -152,6 +151,7 @@ class Station():
             if comm:
                 log_str += "Communication"
             log_filename = r"Log\fail.txt"
+            log_str += "\n"
         with open(log_filename, 'a+',encoding='utf-8') as log:
             log.write(log_str)
             log.close()
@@ -211,6 +211,16 @@ def getCOMPorts():
     except IOError:
         messagebox.showinfo("IOError", "Missing config.txt file")
 
+def getNumDevicesLoaded():
+    try:
+        with open("device_counter.txt", 'r+', encoding = 'utf-8') as dev:
+            return int(dev.readline())
+    except IOError as e:
+        with open("device_counter.txt", "w", encoding = 'utf-8') as file:
+            file.write('0')
+            return 0
+
+
 class Application:
     def __init__(self, parent):
         self.parent = parent
@@ -218,22 +228,29 @@ class Application:
         self.parent.geometry("600x400")
         self.stations = []
         self.frame = tk.Frame(self.parent)
-        self.titleLabel = tk.Label(self.frame, text = 'Details/Instructions', font = ("Times", 16))
+        self.titleLabel = tk.Label(self.frame, text = 'Details/Instructions', font = 10)
         self.instructions = tk.Label(self.frame, text = '- Programming stations \
 are labelled with both COM ports listed in config.txt\n \
-            - Click START to begin the upload and verification')
-        self.start = tk.Button(self.frame, text = "START", width = 10, height = 2, command = self.startUpload);
-        self.packObjects()
+            - Click START to begin the upload and verification', pady = 10)
+        self.start = tk.Button(self.frame, text = "START", height = 2, command = self.startUpload);
         devices = getCOMPorts()
         can_com = devices[0]
+        self.can_label = tk.Label(self.frame, text = "Shared CAN port: " + can_com)
+        long_len = len(self.can_label.cget("text"))
+        self.devicesLoaded = tk.Label(self.frame, text = ("Devices Loaded: ").ljust(long_len), pady = 10)
+        self.start = tk.Button(self.frame, text = "START", width = long_len, bg = "#20c0bb")
+        self.start.configure(height = 3, command = self.startUpload, padx = 0)
+        self.packObjects()
         for d in range(1, len(devices)):
             self.stations.append(Station(root, devices[d][0], devices[d][1], can_com, d))
 
     def packObjects(self):
+        self.frame.pack(side = tk.TOP)
         self.titleLabel.pack()
         self.instructions.pack()
-        self.frame.pack()
         self.start.pack()
+        self.can_label.pack(side = tk.LEFT)
+        self.devicesLoaded.pack(side = tk.RIGHT)
 
     def startUpload(self):
         for stat in self.stations:
