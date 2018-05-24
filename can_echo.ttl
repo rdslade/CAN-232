@@ -1,0 +1,59 @@
+
+;
+; CAN-232 Echo Server
+;
+;
+; TODO - add all the necessary top comments
+
+
+
+connect '/C=22 /BAUD=115200'
+
+count = 0;
+
+timeout = 2;
+
+:repeat
+
+wait ';'
+if result = 0 then
+   closett
+   exit
+endif
+
+CAN_MSG = inputstr
+dispstr CAN_MSG
+mpause 10
+
+send ':S123N00ABCD00;'
+mpause 10
+
+goto repeat
+
+
+;;;;;;;;;;;;;;;;;;;;;
+; extra stuff below not needed, kept here for copy-paste convenience
+
+if count > 10 then
+   closett
+   exit
+endif
+
+count = count+1
+
+wait ':S123N00ABCD00;'
+if result = 0 then
+   closett
+   exit
+endif
+
+CAN_MSG = inputstr
+
+dispstr CAN_MSG
+mpause 100
+
+send ':S123N00ABCD00;'
+mpause 100
+
+goto repeat
+

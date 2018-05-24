@@ -11,12 +11,13 @@ from multiprocessing import Queue, Process
 
 
 class Station():
-    def __init__(self, parent, prog_com_, out_com_, stat_num):
+    def __init__(self, parent, prog_com_, out_com_, can_com_, stat_num):
         self.thread = threading.Thread(target = self.run)
         self.station_num = stat_num
         self.parent = parent
         self.prog_com = prog_com_
         self.out_com = out_com_
+        self.can_com = can_com_
         self.frame = tk.Frame(self.parent)
         self.initComponents()
         self.packObjects()
@@ -69,42 +70,66 @@ class Station():
             self.explanation.configure(text = "Could not open serial port(s)")
             return 1
 
-    def verification(self):
+    def verify(self):
         # Begin Verification
         self.currentStatus.configure(text = "Verification Stage")
-        # Helper function for reading serial words
-        def readSerialWord(ser_port):
-            char = '0'
-            response = ""
-            while char != '':
-                char = ser_port.read().decode()
-                response += char
-            return response
         # Open serial port
         try:
             with serial.Serial(self.out_com, baudrate = 115200, timeout = .1) as buttonSer:
                 addTextToLabel(self.explanation, "\n\nPress the button")
-
+                #Check button push / boot mode
                 checkMode = "start"
                 while checkMode[2:] != "#0#":
                     buttonSer.write("\n\r".encode())
                     checkMode = readSerialWord(buttonSer)
 
                 addTextToLabel(self.explanation, "\nButton Pressed\nVerifying Firmware Version")
-
+                #Confirm version
                 buttonSer.write("get version\r".encode())
                 version = readSerialWord(buttonSer)
+                buttonSer.write("exit\r".encode())
                 buttonSer.close()
                 if "APP=2.01A" not in version:
                     addTextToLabel(self.explanation, "\n\nWRONG FIRMWARE VERSION")
-                    self.currentStatus.configure(text = "FAIL")
                     return 1
                 else:
                     addTextToLabel(self.explanation, "\nSUCCESSFUL VERIFICATION")
-                    self.currentStatus.configure(text = "SUCCESS")
                     return 0
-        except SerialException as e:
+        except serial.SerialException as e:
             addTextToLabel(self.explanation, "\n\nCould not open serial port(s)")
+            return 1
+
+    def testMessages(self):
+        self.currentStatus.configure(text = "Testing Communication")
+        addTextToLabel(self.explanation, "\n")
+        try:
+            num_loops = 50
+            main_mod = serial.Serial(self.out_com, baudrate = 115200, timeout = .03)
+            main_mod.write("exit\r".encode()) #ensure this port is in correct mode for communication 
+            CAN = serial.Serial(self.can_com, baudrate = 115200, timeout = .03)
+            successes = 0
+            for i in range(0, num_loops):
+                main_mod.write(":S123N00ABCD00;".encode())
+                CAN_recieve = readSerialWord(CAN)
+                if(";" in CAN_recieve):
+                    CAN.write(":S123N00ABCD00;".encode())
+                    successes += 1
+            CAN.close()
+            main_mod.close()
+            addTextToLabel(self.explanation, "\n"+str(successes)+"/"+str(num_loops)+" successes")
+            if successes == num_loops:
+                addTextToLabel(self.explanation, "\nSUCCESSFUL COMMUNICATION")
+                self.currentStatus.configure(text = "SUCCESS")
+                return 0
+            else:
+                addTextToLabel(self.explanation, "\nFAILED COMMUNICATION")
+                self.currentStatus.configure(text = "FAIL")
+                return 1
+
+        except serial.SerialException as e:
+            addTextToLabel(self.explanation, "\n\nCould not open serial port(s)")
+            return 1
+
 
     def stopProgressBar(self, fail):
         self.progressBar.stop()
@@ -121,20 +146,36 @@ class Station():
         self.restartProgressBar()
         self.explanation.configure(text = "")
         self.configureTextFiles()
-        fail = self.runFlashCommand()
-        if not fail:
-            self.stopProgressBar(self.verification())
+        flash_fail = verify_fail = test_fail = 1
+        flash_fail = self.runFlashCommand()
+        if not flash_fail:
+            verify_fail = self.verify()
+        if not flash_fail and not verify_fail:
+            test_fail = self.testMessages()
+        self.stopProgressBar(flash_fail + flash_fail + test_fail)
 
     def createNewThread(self):
         self.thread = threading.Thread(target = self.run)
         self.thread.start()
+
+# Helper function for reading serial words
+def readSerialWord(ser_port):
+    char = '0'
+    response = ""
+    while char != '':
+        char = ser_port.read().decode()
+        response += char
+    return response
+
 def addTextToLabel(label, textToAdd):
     label.configure(text = label.cget("text") + textToAdd);
+
 def getCOMPorts():
     try:
         with open("config.txt", 'r',encoding='utf-8' ) as mp:
             mp.readline()
             devices = []
+            devices.append(mp.readline().split()[0])
             for line in mp.readlines():
                 ports = []
                 for p in line.split():
@@ -159,10 +200,9 @@ are labelled with both COM ports listed in config.txt\n \
         self.start = tk.Button(self.frame, text = "START", width = 10, height = 2, command = self.startUpload);
         self.packObjects()
         devices = getCOMPorts()
-        i = 0
-        for d in devices:
-            self.stations.append(Station(root, d[0], d[1], i))
-            i += 1
+        can_com = devices[0]
+        for d in range(1, len(devices)):
+            self.stations.append(Station(root, devices[d][0], devices[d][1], can_com, d))
 
     def packObjects(self):
         self.titleLabel.pack()
