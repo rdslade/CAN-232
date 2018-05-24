@@ -1,6 +1,0 @@
-COM(5, 115200)
-DEVICE(LPC1756, 0.000000, 0)
-HARDWARE(BOOTEXEC, 50, 100)
-ERASE(DEVICE, PROTECTISP)
-HEXFILE(C:\Acacetus\ResMed ONLY\can-uvccm-pro-resmed.1.02A.production.hex, NOCHECKSUMS, NOFILL, PROTECTISP)
-VERIFY(C:\Acacetus\ResMed ONLY\can-uvccm-pro-resmed.1.02A.production.hex, NOCHECKSUMS)
