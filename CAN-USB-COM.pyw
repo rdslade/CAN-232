@@ -11,9 +11,11 @@ import datetime
 import threading
 from multiprocessing import Queue, Process
 
+### class which details the specifics of each individual station programming
+### threaded such that multiple Station instances can run simultaneously
 class Station():
     def __init__(self, parent, prog_com_, out_com_, can_com_, stat_num):
-        self.thread = threading.Thread(target = self.run)
+        self.thread = threading.Thread(target = self.process)
         self.station_num = stat_num
         self.parent = parent
         self.prog_com = prog_com_
@@ -24,6 +26,7 @@ class Station():
         self.initComponents()
         self.packObjects()
 
+    ### Creates the components associated with a single Station instance
     def initComponents(self):
         self.instructions = tk.Label(self.frame, text = self.prog_com + "\\" + self.out_com)
         self.statusSpace = tk.LabelFrame(self.frame, width = 200, height = 250)
@@ -31,6 +34,7 @@ class Station():
         self.progressBar = ttk.Progressbar(self.statusSpace, mode = 'determinate', length = 125)
         self.explanation = tk.Label(self.statusSpace, text = "", width = 25, pady = 10)
 
+    ### Loads objects into correct places
     def packObjects(self):
         self.instructions.pack()
         self.statusSpace.pack()
@@ -39,22 +43,25 @@ class Station():
         self.explanation.pack()
         self.frame.pack(side = tk.LEFT, padx = 10)
 
+    ### Configures command text file
     def configureTextFiles(self):
-        ## Configure command text file
+
         self.currentStatus.configure(text = "Configuring executables")
         try:
             file_name = r'CANUSB_Config\CANUSB_CommandFile'+str(self.station_num)+'.txt'
             with open(file_name, 'r+', encoding = 'utf-8') as command:
+                # Find where the port number is stored
                 command.seek(4)
                 prog_com_number = self.prog_com.split("COM")[1]
                 if(len(prog_com_number) == 1):
                     prog_com_number = '0'+prog_com_number
+                # Write in the new (actual) port to be programmed
                 command.write(prog_com_number)
         except FileIO:
             messagebox.showinfo("IOError", "Cannot open CANUSB_CommandFile.txt")
 
+    ## Get magic flash commands ready
     def runFlashCommand(self):
-        ## Get magic flash commands ready
         self.currentStatus.configure(text = "Loading firmware")
         flash_magic_cmd = r"CANUSB_Flash\CANUSB_Flash"+str(self.station_num)+".bat"
         try:
@@ -72,6 +79,7 @@ class Station():
             self.explanation.configure(text = "Could not open serial port(s)")
             return 1
 
+    ### Check version number of firmware to make sure device was correctly programmed
     def verify(self):
         # Begin Verification
         self.currentStatus.configure(text = "Verification Stage")
@@ -104,8 +112,10 @@ class Station():
                     return 0
         except serial.SerialException as e:
             addTextToLabel(self.explanation, "\n\nCould not open serial port(s)")
+            self.currentStatus.configure(text = "FAIL")
             return 1
 
+    ### Test round trip communications (Serial -> CAN -> Serial)
     def testMessages(self):
         self.currentStatus.configure(text = "Testing Communication")
         addTextToLabel(self.explanation, "\n")
@@ -116,14 +126,21 @@ class Station():
             CAN = serial.Serial(self.can_com, baudrate = 115200, timeout = .03)
             successes = 0
             for i in range(0, num_loops):
+                # Send initial serial message
                 main_mod.write(":S123N00ABCD00;".encode())
+                # Recieve and verify incoming messages on other end
                 CAN_recieve = readSerialWord(CAN)
                 if(";" in CAN_recieve):
+                    # If successful, write command back to original end
                     CAN.write(":S123N00ABCD00;".encode())
-                    successes += 1
+                    Ser_recieve = readSerialWord(main_mod)
+                    if(";" in Ser_recieve):
+                        # If recieved and verified, communication was successful
+                        successes += 1
             CAN.close()
             main_mod.close()
             addTextToLabel(self.explanation, "\n"+str(successes)+"/"+str(num_loops)+" successes")
+            # All communications must be successful
             if successes == num_loops:
                 addTextToLabel(self.explanation, "\nSUCCESSFUL COMMUNICATION")
                 self.currentStatus.configure(text = "SUCCESS")
@@ -135,14 +152,18 @@ class Station():
 
         except serial.SerialException as e:
             addTextToLabel(self.explanation, "\n\nCould not open serial port(s)")
+            self.currentStatus.configure(text = "FAIL")
             return 1
 
+    ### Organize and log status of each Station instance
     def log_run(self, flash, verify, comm):
         full_date = str(datetime.datetime.now())
         log_str = full_date + " "
+        # No Failures
         if(not flash and not verify and not comm):
             log_str += self.sernum + " " + self.version + " " + self.deviceType + "SUCCESS"
             log_filename = r"Log\success.txt"
+        # Some form of failure
         else:
             log_str += "ERROR- "
             if flash:
@@ -157,6 +178,7 @@ class Station():
             log.write(log_str)
             log.close()
 
+    ### Stops and configures progress bar to correct style
     def stopProgressBar(self, fail):
         self.progressBar.stop()
         if not fail:
@@ -164,78 +186,100 @@ class Station():
         else:
             self.progressBar.configure(value = 100, style = "red.Horizontal.TProgressbar")
 
+    ### Resets styles and progress of progress bar
     def restartProgressBar(self):
         self.progressBar.configure(value = 0, style = "Horizontal.TProgressbar")
         self.progressBar.start()
 
-    def run(self):
+    ### Initiates each step of the entire programming process
+    def process(self):
         self.restartProgressBar()
         self.explanation.configure(text = "")
+        # Configre text files signifying programming ports
         self.configureTextFiles()
         flash_fail = verify_fail = test_fail = 0
+        # Run programming
         flash_fail = self.runFlashCommand()
+        # Run version verification is successful
         if not flash_fail:
             verify_fail = self.verify()
+        # Run communication test if not failures
         if not flash_fail and not verify_fail:
             test_fail = self.testMessages()
+        # Log results
         self.log_run(flash_fail, verify_fail, test_fail)
         overallFail = flash_fail + flash_fail + test_fail
         self.stopProgressBar(overallFail)
+        # Update successful iterations
         if not overallFail:
             loaded.set(loaded.get() + 1)
 
+    ### Restarts thread with new instantiation
     def createNewThread(self):
-        self.thread = threading.Thread(target = self.run)
+        self.thread = threading.Thread(target = self.process)
         self.thread.start()
 
-# Helper function for reading serial words
+### Helper function for reading serial words
 def readSerialWord(ser_port):
     char = '0'
     response = ""
+    # Continue reading word until not more chars
     while char != '':
         char = ser_port.read().decode()
         response += char
     return response
 
+### Reconfigures parameter label to append input text
 def addTextToLabel(label, textToAdd):
     label.configure(text = label.cget("text") + textToAdd);
 
+### Read COM ports from config file and returned organized lists of ports
 def getCOMPorts():
     try:
-        with open("config.txt", 'r',encoding='utf-8' ) as mp:
-            mp.readline()
+        with open("config.txt", 'r+',encoding='utf-8' ) as mp:
+            mp.readline() #first line is instructions
             devices = []
-            devices.append(mp.readline().split()[0])
+            devices.append(mp.readline().split()[0]) #first device is the common port
             for line in mp.readlines():
                 ports = []
                 for p in line.split():
+                    # Add all COM ports associated with one device
                     if "COM" in p:
                         ports.append(p)
                 devices.append(ports)
         return devices
     except IOError:
         messagebox.showinfo("IOError", "Missing config.txt file")
+        with open("config.txt", "w+", encoding="utf-8") as file:
+            file.write("COM1\nCOM2 COM3")
 
+### Reads counter file and returns value in the file
 def getNumDevicesLoaded():
     try:
         with open("device_counter.txt", 'r+', encoding = 'utf-8') as dev:
             return int(dev.readline())
-    except IOError as e:
+    except IOError:
         with open("device_counter.txt", "w", encoding = 'utf-8') as file:
             file.write('0')
             return 0
-
+### Callback for updating IntVar variable represeting successful device programmings
 def updateDevicesLoaded(*args):
     devicesLoaded.configure(text = ("Devices Loaded: " + str(loaded.get())).ljust(long_len))
     with open("device_counter.txt", 'w+', encoding = 'utf-8') as dev:
         dev.write(str(loaded.get()) + "\n")
 
+### high level applications which includes all relevant pieces and instances of
+### Station class and other widgets
 class Application:
     def __init__(self, parent):
         global loaded, devicesLoaded, long_len
         loaded = IntVar()
         loaded.set(getNumDevicesLoaded())
         loaded.trace("w", updateDevicesLoaded)
+        s = ttk.Style()
+        s.theme_use('default')
+        s.configure("red.Horizontal.TProgressbar", foreground='red', background='red')
+        s.configure("green.Horizontal.TProgressbar", foreground='green', background='green')
         self.parent = parent
         self.parent.title("CAN-232 Programmer")
         self.stations = []
@@ -245,7 +289,8 @@ class Application:
 are labelled with both COM ports listed in config.txt\n \
             - Click START to begin the upload and verification', pady = 10)
         devices = getCOMPorts()
-        root_width = (len(devices) - 1) * 205
+        # Size of window based on how many stations are present
+        root_width = max(410, (len(devices) - 1) * 205)
         self.parent.geometry(str(root_width) + "x400")
         can_com = devices[0]
         self.can_label = tk.Label(self.frame, text = "Shared CAN port: " + can_com)
@@ -253,9 +298,11 @@ are labelled with both COM ports listed in config.txt\n \
         devicesLoaded = tk.Label(self.frame, text = ("Devices Loaded: " + str(loaded.get())).ljust(long_len), pady = 10)
         self.start = tk.Button(self.frame, text = "START", width = long_len, bg = "#20c0bb", height = 3, command = self.startUpload)
         self.packObjects()
+        # d[0] is common port; begin Station initalization at 1, passing in unique station id
         for d in range(1, len(devices)):
             self.stations.append(Station(root, devices[d][0], devices[d][1], can_com, d))
 
+    ### Places objects on screen in correct format
     def packObjects(self):
         self.frame.pack(side = tk.TOP)
         self.titleLabel.pack()
@@ -264,17 +311,14 @@ are labelled with both COM ports listed in config.txt\n \
         self.can_label.pack(side = tk.LEFT)
         devicesLoaded.pack(side = tk.RIGHT)
 
+    ### Trigger function for START button which begins/continues each Station thread
     def startUpload(self):
         for stat in self.stations:
             if not stat.thread.is_alive():
                 stat.createNewThread()
 
-
+### Instantiate the root window and start the Application
 if __name__ == "__main__":
     root = tk.Tk()
     a1 = Application(root)
-    s = ttk.Style()
-    s.theme_use('default')
-    s.configure("red.Horizontal.TProgressbar", foreground='red', background='red')
-    s.configure("green.Horizontal.TProgressbar", foreground='green', background='green')
     root.mainloop()
