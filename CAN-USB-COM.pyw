@@ -238,7 +238,6 @@ class Application:
         loaded.trace("w", updateDevicesLoaded)
         self.parent = parent
         self.parent.title("CAN-232 Programmer")
-        self.parent.geometry("600x400")
         self.stations = []
         self.frame = tk.Frame(self.parent)
         self.titleLabel = tk.Label(self.frame, text = 'Details/Instructions', font = 10)
@@ -246,6 +245,8 @@ class Application:
 are labelled with both COM ports listed in config.txt\n \
             - Click START to begin the upload and verification', pady = 10)
         devices = getCOMPorts()
+        root_width = (len(devices) - 1) * 205
+        self.parent.geometry(str(root_width) + "x400")
         can_com = devices[0]
         self.can_label = tk.Label(self.frame, text = "Shared CAN port: " + can_com)
         long_len = len(self.can_label.cget("text"))
@@ -264,7 +265,6 @@ are labelled with both COM ports listed in config.txt\n \
         devicesLoaded.pack(side = tk.RIGHT)
 
     def startUpload(self):
-        loaded.set(loaded.get() + 1)
         for stat in self.stations:
             if not stat.thread.is_alive():
                 stat.createNewThread()
