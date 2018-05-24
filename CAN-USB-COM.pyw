@@ -2,6 +2,7 @@ import subprocess
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
+from tkinter import IntVar
 from time import sleep
 import serial
 import sys
@@ -155,6 +156,7 @@ class Station():
         with open(log_filename, 'a+',encoding='utf-8') as log:
             log.write(log_str)
             log.close()
+
     def stopProgressBar(self, fail):
         self.progressBar.stop()
         if not fail:
@@ -177,7 +179,10 @@ class Station():
         if not flash_fail and not verify_fail:
             test_fail = self.testMessages()
         self.log_run(flash_fail, verify_fail, test_fail)
-        self.stopProgressBar(flash_fail + flash_fail + test_fail)
+        overallFail = flash_fail + flash_fail + test_fail
+        self.stopProgressBar(overallFail)
+        if not overallFail:
+            loaded.set(loaded.get() + 1)
 
     def createNewThread(self):
         self.thread = threading.Thread(target = self.run)
@@ -220,9 +225,17 @@ def getNumDevicesLoaded():
             file.write('0')
             return 0
 
+def updateDevicesLoaded(*args):
+    devicesLoaded.configure(text = ("Devices Loaded: " + str(loaded.get())).ljust(long_len))
+    with open("device_counter.txt", 'w+', encoding = 'utf-8') as dev:
+        dev.write(str(loaded.get()) + "\n")
 
 class Application:
     def __init__(self, parent):
+        global loaded, devicesLoaded, long_len
+        loaded = IntVar()
+        loaded.set(getNumDevicesLoaded())
+        loaded.trace("w", updateDevicesLoaded)
         self.parent = parent
         self.parent.title("CAN-232 Programmer")
         self.parent.geometry("600x400")
@@ -232,14 +245,12 @@ class Application:
         self.instructions = tk.Label(self.frame, text = '- Programming stations \
 are labelled with both COM ports listed in config.txt\n \
             - Click START to begin the upload and verification', pady = 10)
-        self.start = tk.Button(self.frame, text = "START", height = 2, command = self.startUpload);
         devices = getCOMPorts()
         can_com = devices[0]
         self.can_label = tk.Label(self.frame, text = "Shared CAN port: " + can_com)
         long_len = len(self.can_label.cget("text"))
-        self.devicesLoaded = tk.Label(self.frame, text = ("Devices Loaded: ").ljust(long_len), pady = 10)
-        self.start = tk.Button(self.frame, text = "START", width = long_len, bg = "#20c0bb")
-        self.start.configure(height = 3, command = self.startUpload, padx = 0)
+        devicesLoaded = tk.Label(self.frame, text = ("Devices Loaded: " + str(loaded.get())).ljust(long_len), pady = 10)
+        self.start = tk.Button(self.frame, text = "START", width = long_len, bg = "#20c0bb", height = 3, command = self.startUpload)
         self.packObjects()
         for d in range(1, len(devices)):
             self.stations.append(Station(root, devices[d][0], devices[d][1], can_com, d))
@@ -250,9 +261,10 @@ are labelled with both COM ports listed in config.txt\n \
         self.instructions.pack()
         self.start.pack()
         self.can_label.pack(side = tk.LEFT)
-        self.devicesLoaded.pack(side = tk.RIGHT)
+        devicesLoaded.pack(side = tk.RIGHT)
 
     def startUpload(self):
+        loaded.set(loaded.get() + 1)
         for stat in self.stations:
             if not stat.thread.is_alive():
                 stat.createNewThread()
