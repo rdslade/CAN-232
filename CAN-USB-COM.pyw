@@ -10,6 +10,7 @@ import time
 import datetime
 import threading
 from multiprocessing import Queue, Process
+import re
 
 ### class which details the specifics of each individual station programming
 ### threaded such that multiple Station instances can run simultaneously
@@ -74,9 +75,8 @@ class Station():
             return 0
 
         except subprocess.CalledProcessError as e:
-            self.stopProgressBar(1)
-            self.currentStatus.configure(text = "FAIL")
-            self.explanation.configure(text = "Could not open serial port(s)")
+            if "Unable to communicate".encode() in e.output:
+                self.explanation.configure(text = "Could not open " + self.prog_com)
             return 1
 
     ### Check version number of firmware to make sure device was correctly programmed
@@ -111,8 +111,8 @@ class Station():
                     addTextToLabel(self.explanation, "\nSUCCESSFUL VERIFICATION")
                     return 0
         except serial.SerialException as e:
-            addTextToLabel(self.explanation, "\n\nCould not open serial port(s)")
-            self.currentStatus.configure(text = "FAIL")
+            com_problem = re.findall(r'(?<=\').*?(?=\')', str(e))[0]
+            addTextToLabel(self.explanation, "\n\nCould not open serial port " + com_problem)
             return 1
 
     ### Test round trip communications (Serial -> CAN -> Serial)
@@ -143,40 +143,40 @@ class Station():
             # All communications must be successful
             if successes == num_loops:
                 addTextToLabel(self.explanation, "\nSUCCESSFUL COMMUNICATION")
-                self.currentStatus.configure(text = "SUCCESS")
                 return 0
             else:
                 addTextToLabel(self.explanation, "\nFAILED COMMUNICATION")
-                self.currentStatus.configure(text = "FAIL")
                 return 1
 
         except serial.SerialException as e:
-            addTextToLabel(self.explanation, "\n\nCould not open serial port(s)")
-            self.currentStatus.configure(text = "FAIL")
+            com_problem = re.findall(r'(?<=\').*?(?=\')', str(e))[0]
+            addTextToLabel(self.explanation, "\n\nCould not open serial port " + com_problem)
             return 1
 
     ### Organize and log status of each Station instance
     def log_run(self, flash, verify, comm):
-        full_date = str(datetime.datetime.now())
-        log_str = full_date + " "
-        # No Failures
-        if(not flash and not verify and not comm):
-            log_str += self.sernum + " " + self.version + " " + self.deviceType + "SUCCESS"
-            log_filename = r"Log\success.txt"
-        # Some form of failure
-        else:
-            log_str += "ERROR- "
-            if flash:
-                log_str += "Loading firmware"
-            if verify:
-                log_str += "Verification"
-            if comm:
-                log_str += "Communication"
-            log_filename = r"Log\fail.txt"
+        # Only log is some sort of upload was attempted
+        if not flash:
+            full_date = str(datetime.datetime.now())
+            log_str = full_date + " " + self.sernum + " " + self.version + " " + self.deviceType
+            # No Failures
+            if(not flash and not verify and not comm):
+                log_str += " SUCCESS"
+                log_filename = r"Log\success.txt"
+            # Some form of failure
+            else:
+                log_str += "ERROR- "
+                if flash:
+                    log_str = ""
+                if verify:
+                    log_str += "Verification "
+                if comm:
+                    log_str += "Communication "
+                log_filename = r"Log\fail.txt"
             log_str += "\n"
-        with open(log_filename, 'a+',encoding='utf-8') as log:
-            log.write(log_str)
-            log.close()
+            with open(log_filename, 'a+',encoding='utf-8') as log:
+                log.write(log_str)
+                log.close()
 
     ### Stops and configures progress bar to correct style
     def stopProgressBar(self, fail):
@@ -213,6 +213,9 @@ class Station():
         # Update successful iterations
         if not overallFail:
             loaded.set(loaded.get() + 1)
+            self.currentStatus.configure(text = "SUCCESS")
+        else:
+            self.currentStatus.configure(text = "FAIL")
 
     ### Restarts thread with new instantiation
     def createNewThread(self):
