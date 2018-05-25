@@ -161,11 +161,10 @@ class Station():
             log_str = full_date + " " + self.sernum + " " + self.version + " " + self.deviceType
             # No Failures
             if(not flash and not verify and not comm):
-                log_str += " SUCCESS"
                 log_filename = r"Log\success.txt"
             # Some form of failure
             else:
-                log_str += "ERROR- "
+                log_str += " ERROR- "
                 if flash:
                     log_str = ""
                 if verify:
@@ -294,7 +293,7 @@ are labelled with both COM ports listed in config.txt\n \
         devices = getCOMPorts()
         # Size of window based on how many stations are present
         root_width = max(410, (len(devices) - 1) * 205)
-        self.parent.geometry(str(root_width) + "x400")
+        self.parent.geometry(str(root_width) + "x500")
         can_com = devices[0]
         self.can_label = tk.Label(self.frame, text = "Shared CAN port: " + can_com)
         long_len = len(self.can_label.cget("text"))
