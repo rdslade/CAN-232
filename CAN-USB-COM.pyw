@@ -12,6 +12,7 @@ import threading
 from multiprocessing import Queue, Process
 import re
 
+gridColor = "#20c0bb"
 ### class which details the specifics of each individual station programming
 ### threaded such that multiple Station instances can run simultaneously
 class Station():
@@ -34,6 +35,20 @@ class Station():
         self.currentStatus = tk.Label(self.statusSpace, text = "", width = 25, pady = 10)
         self.progressBar = ttk.Progressbar(self.statusSpace, mode = 'determinate', length = 125)
         self.explanation = tk.Label(self.statusSpace, text = "", width = 25, pady = 10)
+        self.barrier = ttk.Separator(self.statusSpace)
+        self.program = IntVar()
+        self.verify = IntVar()
+        self.communicate = IntVar()
+        self.chooseLabel = tk.Label(self.statusSpace, text = "Select desired functions", fg = gridColor, pady = 5)
+        self.chooseProgramming = tk.Checkbutton(self.statusSpace, text = "Program Module", variable = self.program)
+        self.chooseVerify = tk.Checkbutton(self.statusSpace, text = "Verify Device Version", variable = self.verify)
+        self.chooseCommunicate = tk.Checkbutton(self.statusSpace, text = "Test Device Communication", variable = self.communicate)
+
+    ### Changes all checkboxes states to parameter
+    def changeAllCheckboxes(self, state_):
+        self.chooseProgramming.configure(state = state_)
+        self.chooseVerify.configure(state = state_)
+        self.chooseCommunicate.configure(state = state_)
 
     ### Loads objects into correct places
     def packObjects(self):
@@ -42,6 +57,14 @@ class Station():
         self.currentStatus.pack()
         self.progressBar.pack()
         self.explanation.pack()
+        self.barrier.pack(fill = "x", expand = True)
+        self.chooseLabel.pack()
+        self.chooseProgramming.pack()
+        self.chooseVerify.pack()
+        self.chooseCommunicate.pack()
+        self.chooseProgramming.select()
+        self.chooseVerify.select()
+        self.chooseCommunicate.select()
         self.frame.pack(side = tk.LEFT, padx = 10)
 
     ### Configures command text file
@@ -76,11 +99,11 @@ class Station():
 
         except subprocess.CalledProcessError as e:
             if "Unable to communicate".encode() in e.output:
-                self.explanation.configure(text = "Could not open " + self.prog_com)
+                self.explanation.configure(text = "\nCould not open " + self.prog_com)
             return 1
 
     ### Check version number of firmware to make sure device was correctly programmed
-    def verify(self):
+    def performVerification(self):
         # Begin Verification
         self.currentStatus.configure(text = "Verification Stage")
         # Open serial port
@@ -112,7 +135,7 @@ class Station():
                     return 0
         except serial.SerialException as e:
             com_problem = re.findall(r'(?<=\').*?(?=\')', str(e))[0]
-            addTextToLabel(self.explanation, "\n\nCould not open serial port " + com_problem)
+            addTextToLabel(self.explanation, "\nCould not open " + com_problem)
             return 1
 
     ### Test round trip communications (Serial -> CAN -> Serial)
@@ -150,7 +173,7 @@ class Station():
 
         except serial.SerialException as e:
             com_problem = re.findall(r'(?<=\').*?(?=\')', str(e))[0]
-            addTextToLabel(self.explanation, "\n\nCould not open serial port " + com_problem)
+            addTextToLabel(self.explanation, "Could not open " + com_problem)
             return 1
 
     ### Organize and log status of each Station instance
@@ -197,24 +220,30 @@ class Station():
         # Configre text files signifying programming ports
         self.configureTextFiles()
         flash_fail = verify_fail = test_fail = 0
-        # Run programming
-        flash_fail = self.runFlashCommand()
-        # Run version verification is successful
-        if not flash_fail:
-            verify_fail = self.verify()
-        # Run communication test if not failures
-        if not flash_fail and not verify_fail:
-            test_fail = self.testMessages()
-        # Log results
-        self.log_run(flash_fail, verify_fail, test_fail)
-        overallFail = flash_fail + flash_fail + test_fail
+        if self.program.get():
+            # Run programming
+            flash_fail = self.runFlashCommand()
+        if self.verify.get():
+            # Run version verification is successful
+            if not flash_fail:
+                verify_fail = self.performVerification()
+        if self.communicate.get():
+            # Run communication test if not failures
+            if not flash_fail and not verify_fail:
+                test_fail = self.testMessages()
+        if self.program.get():
+            # Log results
+            self.log_run(flash_fail, verify_fail, test_fail)
+        overallFail = flash_fail + verify_fail + test_fail
         self.stopProgressBar(overallFail)
         # Update successful iterations
         if not overallFail:
-            loaded.set(loaded.get() + 1)
+            if self.program.get():
+                loaded.set(loaded.get() + 1)
             self.currentStatus.configure(text = "SUCCESS")
         else:
             self.currentStatus.configure(text = "FAIL")
+        self.changeAllCheckboxes(tk.NORMAL)
 
     ### Restarts thread with new instantiation
     def createNewThread(self):
@@ -293,12 +322,12 @@ are labelled with both COM ports listed in config.txt\n \
         devices = getCOMPorts()
         # Size of window based on how many stations are present
         root_width = max(410, (len(devices) - 1) * 205)
-        self.parent.geometry(str(root_width) + "x500")
+        self.parent.geometry(str(root_width) + "x700")
         can_com = devices[0]
         self.can_label = tk.Label(self.frame, text = "Shared CAN port: " + can_com)
         long_len = len(self.can_label.cget("text"))
         devicesLoaded = tk.Label(self.frame, text = ("Devices Loaded: " + str(loaded.get())).ljust(long_len), pady = 10)
-        self.start = tk.Button(self.frame, text = "START", width = long_len, bg = "#20c0bb", height = 3, command = self.startUpload)
+        self.start = tk.Button(self.frame, text = "START", width = long_len, bg = gridColor, height = 3, command = self.startUpload)
         self.packObjects()
         # d[0] is common port; begin Station initalization at 1, passing in unique station id
         for d in range(1, len(devices)):
@@ -318,6 +347,7 @@ are labelled with both COM ports listed in config.txt\n \
         for stat in self.stations:
             if not stat.thread.is_alive():
                 stat.createNewThread()
+                stat.changeAllCheckboxes(tk.DISABLED)
 
 ### Instantiate the root window and start the Application
 if __name__ == "__main__":
