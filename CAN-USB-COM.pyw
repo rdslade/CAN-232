@@ -141,7 +141,6 @@ class Station():
     ### Test round trip communications (Serial -> CAN -> Serial)
     def testMessages(self):
         self.currentStatus.configure(text = "Testing Communication")
-        addTextToLabel(self.explanation, "\n")
         try:
             num_loops = 50
             main_mod = serial.Serial(self.out_com, baudrate = 115200, timeout = .03)
@@ -162,7 +161,7 @@ class Station():
                         successes += 1
             CAN.close()
             main_mod.close()
-            addTextToLabel(self.explanation, "\n"+str(successes)+"/"+str(num_loops)+" successes")
+            addTextToLabel(self.explanation, "\n\n"+str(successes)+"/"+str(num_loops)+" successes")
             # All communications must be successful
             if successes == num_loops:
                 addTextToLabel(self.explanation, "\nSUCCESSFUL COMMUNICATION")
@@ -181,15 +180,16 @@ class Station():
         # Only log is some sort of upload was attempted
         if not flash:
             full_date = str(datetime.datetime.now())
-            log_str = full_date + " " + self.sernum + " " + self.version + " " + self.deviceType
+            log_str = full_date + " " + self.sernum + " " + self.version + " " + self.deviceType + " "
             # No Failures
             if(not flash and not verify and not comm):
+                log_str += str(self.program.get()) + " " + str(self.verify.get()) + " " + str(self.communicate.get())
                 log_filename = r"Log\success.txt"
             # Some form of failure
             else:
-                log_str += " ERROR- "
+                log_str += "ERROR- "
                 if flash:
-                    log_str = ""
+                    log_str = "" #TODO
                 if verify:
                     log_str += "Verification "
                 if comm:
@@ -231,7 +231,7 @@ class Station():
             # Run communication test if not failures
             if not flash_fail and not verify_fail:
                 test_fail = self.testMessages()
-        if self.program.get():
+        if self.program.get() or self.verify.get():
             # Log results
             self.log_run(flash_fail, verify_fail, test_fail)
         overallFail = flash_fail + verify_fail + test_fail
