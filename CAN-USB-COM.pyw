@@ -164,7 +164,7 @@ class Station():
                 buttonSer.write("exit\r".encode())
                 #Clock Serial Port
                 buttonSer.close()
-                if "APP=2.01A" not in self.version:
+                if "APP=2.00A" not in self.version:
                     addTextToLabel(self.explanation, "\n\nWRONG FIRMWARE VERSION")
                     return 1
                 else:

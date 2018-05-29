@@ -1,3 +1,2 @@
 Programming_COM	Output_COM
-COM33 COM34
 COM36 COM37
