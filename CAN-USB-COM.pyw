@@ -13,6 +13,7 @@ from multiprocessing import Queue, Process
 import re
 
 gridColor = "#20c0bb"
+entryWidth = 8
 ### class which details the specifics of each individual station programming
 ### threaded such that multiple Station instances can run simultaneously
 class Station():
@@ -20,8 +21,12 @@ class Station():
         self.thread = threading.Thread(target = self.process)
         self.station_num = stat_num
         self.parent = parent
-        self.prog_com = prog_com_
-        self.out_com = out_com_
+
+        self.prog_com = StringVar()
+        self.prog_com.set(prog_com_)
+        self.out_com = StringVar()
+        self.out_com.set(out_com_)
+
         self.can_com = can_com_
         self.deviceType = "GC-CAN-USB-COM"
         self.frame = tk.Frame(self.parent)
@@ -30,7 +35,15 @@ class Station():
 
     ### Creates the components associated with a single Station instance
     def initComponents(self):
-        self.instructions = tk.Label(self.frame, text = self.prog_com + "\\" + self.out_com)
+        self.setup = tk.Frame(self.frame)
+        self.prog = tk.Frame(self.setup)
+        self.out = tk.Frame(self.setup)
+
+        self.prog_entry = tk.Entry(self.prog, width = entryWidth, textvariable = self.prog_com)
+        self.out_entry = tk.Entry(self.out, width = entryWidth, textvariable = self.out_com)
+        self.prog_label = tk.Label(self.prog, text = "Programming Port: ")
+        self.out_label = tk.Label(self.out, text = "Display Port: ")
+
         self.statusSpace = tk.LabelFrame(self.frame, width = 200, height = 250)
         self.currentStatus = tk.Label(self.statusSpace, text = "", width = 25, pady = 10)
         self.progressBar = ttk.Progressbar(self.statusSpace, mode = 'determinate', length = 125)
@@ -45,14 +58,22 @@ class Station():
         self.chooseCommunicate = tk.Checkbutton(self.statusSpace, text = "Test Device Communication", variable = self.communicate)
 
     ### Changes all checkboxes states to parameter
-    def changeAllCheckboxes(self, state_):
+    def changeAllComponents(self, state_):
         self.chooseProgramming.configure(state = state_)
         self.chooseVerify.configure(state = state_)
         self.chooseCommunicate.configure(state = state_)
+        self.prog_entry.configure(state = state_)
+        self.out_entry.configure(state = state_)
 
     ### Loads objects into correct places
     def packObjects(self):
-        self.instructions.pack()
+        self.prog_label.pack(side = tk.LEFT)
+        self.prog_entry.pack(side = tk.LEFT)
+        self.out_label.pack(side = tk.LEFT)
+        self.out_entry.pack(side = tk.LEFT)
+        self.prog.pack(pady = 5)
+        self.out.pack()
+        self.setup.pack()
         self.statusSpace.pack()
         self.currentStatus.pack()
         self.progressBar.pack()
@@ -75,7 +96,7 @@ class Station():
             with open(file_name, 'r+', encoding = 'utf-8') as command:
                 # Find where the port number is stored
                 command.seek(4)
-                prog_com_number = self.prog_com.split("COM")[1]
+                prog_com_number = self.prog_com.get().split("COM")[1]
                 if(len(prog_com_number) == 1):
                     prog_com_number = '0'+prog_com_number
                 # Write in the new (actual) port to be programmed
@@ -98,7 +119,7 @@ class Station():
 
         except subprocess.CalledProcessError as e:
             if "Unable to communicate".encode() in e.output:
-                self.explanation.configure(text = "\nCould not open " + self.prog_com)
+                self.explanation.configure(text = "\nCould not open " + self.prog_com.get())
             return 1
 
     ### Check version number of firmware to make sure device was correctly programmed
@@ -107,7 +128,7 @@ class Station():
         self.currentStatus.configure(text = "Verification Stage")
         # Open serial port
         try:
-            with serial.Serial(self.out_com, baudrate = 115200, timeout = .1) as buttonSer:
+            with serial.Serial(self.out_com.get(), baudrate = 115200, timeout = .1) as buttonSer:
                 addTextToLabel(self.explanation, "\n\nPress the button")
                 #Check button push / boot mode
                 checkMode = "start"
@@ -133,18 +154,16 @@ class Station():
                     addTextToLabel(self.explanation, "\nSUCCESSFUL VERIFICATION")
                     return 0
         except serial.SerialException as e:
-            com_problem = re.findall(r'(?<=\').*?(?=\')', str(e))[0]
-            addTextToLabel(self.explanation, "\nCould not open " + com_problem)
-            return 1
+            return self.getCOMProblem(e)
 
     ### Test round trip communications (Serial -> CAN -> Serial)
     def testMessages(self):
         self.currentStatus.configure(text = "Testing Communication")
         try:
             num_loops = 50
-            main_mod = serial.Serial(self.out_com, baudrate = 115200, timeout = .03)
+            main_mod = serial.Serial(self.out_com.get(), baudrate = 115200, timeout = .03)
             main_mod.write("exit\r".encode()) #ensure this port is in correct mode for communication
-            CAN = serial.Serial(self.can_com, baudrate = 115200, timeout = .03)
+            CAN = serial.Serial(self.can_com.get(), baudrate = 115200, timeout = .03)
             successes = 0
             for i in range(0, num_loops):
                 # Send initial serial message
@@ -170,9 +189,13 @@ class Station():
                 return 1
 
         except serial.SerialException as e:
-            com_problem = re.findall(r'(?<=\').*?(?=\')', str(e))[0]
-            addTextToLabel(self.explanation, "Could not open " + com_problem)
-            return 1
+            return self.getCOMProblem(e)
+
+    ### Read the issue COM port and display status of that port
+    def getCOMProblem(self, e):
+        com_problem = re.findall(r'(?<=\').*?(?=\')', str(e))[0]
+        addTextToLabel(self.explanation, "Could not open " + com_problem)
+        return 1
 
     ### Organize and log status of each Station instance
     def log_run(self, flash, verify, comm):
@@ -242,7 +265,7 @@ class Station():
             self.currentStatus.configure(text = "SUCCESS")
         else:
             self.currentStatus.configure(text = "FAIL")
-        self.changeAllCheckboxes(tk.NORMAL)
+        self.changeAllComponents(tk.NORMAL)
 
     ### Restarts thread with new instantiation
     def createNewThread(self):
@@ -265,11 +288,12 @@ def addTextToLabel(label, textToAdd):
 
 ### Read COM ports from config file and returned organized lists of ports
 def getCOMPorts():
+    devices = []
     try:
-        with open("config.txt", 'r+',encoding='utf-8' ) as mp:
+        with open("Config\can_config.txt", 'r+', encoding = 'utf-8') as common:
+            devices.append(common.readline().split()[0]) #first device is the common port
+        with open("Config\ports_config.txt", 'r+',encoding='utf-8' ) as mp:
             mp.readline() #first line is instructions
-            devices = []
-            devices.append(mp.readline().split()[0]) #first device is the common port
             for line in mp.readlines():
                 ports = []
                 for p in line.split():
@@ -279,9 +303,7 @@ def getCOMPorts():
                 devices.append(ports)
         return devices
     except IOError:
-        messagebox.showinfo("IOError", "Missing config.txt file")
-        with open("config.txt", "w+", encoding="utf-8") as file:
-            file.write("COM1\nCOM2 COM3")
+        print("hi") #TODO
 
 ### Reads counter file and returns value in the file
 def getNumDevicesLoaded():
@@ -309,6 +331,7 @@ def updateDevicesLoaded(*args):
     with open("device_counter.txt", 'w+', encoding = 'utf-8') as dev:
         dev.write(str(loaded.get()))
         dev.close()
+
 ### high level applications which includes all relevant pieces and instances of
 ### Station class and other widgets
 class Application:
@@ -336,7 +359,8 @@ are labelled with both COM ports listed in config.txt\n \
         self.parent.geometry(str(root_width) + "x700")
         self.can_com_text = StringVar()
         self.can_com_text.set(devices[0])
-        self.can_entry = tk.Entry(self.frame, width = 10, textvariable = self.can_com_text)
+        self.can_com_text.trace("w", self.updateCommonPort)
+        self.can_entry = tk.Entry(self.frame, width = entryWidth, textvariable = self.can_com_text)
         self.can_label = tk.Label(self.frame, text = "Shared CAN port: ")
         long_len = len(self.can_entry.get()) + len(self.can_label.cget("text"))
         devicesLoaded = tk.Label(self.frame, text = ("Devices Loaded: " + str(loaded.get())).ljust(long_len), pady = 10)
@@ -345,7 +369,7 @@ are labelled with both COM ports listed in config.txt\n \
         self.packObjects()
         # d[0] is common port; begin Station initalization at 1, passing in unique station id
         for d in range(1, len(devices)):
-            self.stations.append(Station(root, devices[d][0], devices[d][1], self.can_com_text.get(), d))
+            self.stations.append(Station(root, devices[d][0], devices[d][1], self.can_com_text, d))
 
     ### Places objects on screen in correct format
     def packObjects(self):
@@ -357,6 +381,13 @@ are labelled with both COM ports listed in config.txt\n \
         self.can_label.pack(side = tk.LEFT)
         self.can_entry.pack(side = tk.LEFT)
         devicesLoaded.pack(side = tk.RIGHT)
+
+
+    ### Callback for updating IntVar variable represeting successful device programmings
+    def updateCommonPort(self, *args):
+        with open("Config\can_config.txt", 'w+', encoding = 'utf-8') as dev:
+            dev.write(str(self.can_com_text.get()))
+            dev.close()
 
     ### Create and "pack" menu for main root window
     def configureMenu(self):
@@ -379,7 +410,7 @@ are labelled with both COM ports listed in config.txt\n \
         for stat in self.stations:
             if not stat.thread.is_alive():
                 stat.createNewThread()
-                stat.changeAllCheckboxes(tk.DISABLED)
+                stat.changeAllComponents(tk.DISABLED)
 
 ### Instantiate the root window and start the Application
 if __name__ == "__main__":
