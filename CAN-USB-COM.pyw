@@ -17,10 +17,13 @@ entryWidth = 8
 ### class which details the specifics of each individual station programming
 ### threaded such that multiple Station instances can run simultaneously
 class Station():
-    def __init__(self, parent, prog_com_, out_com_, can_com_, stat_num):
+    def __init__(self, parent, prog_com_, out_com_, can_com_, mode_, stat_num):
         self.thread = threading.Thread(target = self.process)
         self.station_num = stat_num
         self.parent = parent
+
+        self.sernum = ""
+        self.version = ""
 
         self.prog_com = StringVar()
         self.prog_com.set(prog_com_)
@@ -28,6 +31,7 @@ class Station():
         self.out_com.set(out_com_)
 
         self.can_com = can_com_
+        self.mode = mode_
         self.deviceType = "GC-CAN-USB-COM"
         self.frame = tk.Frame(self.parent)
         self.initComponents()
@@ -59,11 +63,24 @@ class Station():
 
     ### Changes all checkboxes states to parameter
     def changeAllComponents(self, state_):
+        self.changeProgramming(state_, self.program.get())
+        self.changeVerify(state_, self.verify.get())
+        self.changeCommunicate(state_, self.communicate.get())
+
+    ### Sets the state and value of the Stations programming boxes
+    def changeProgramming(self, state_, value_):
         self.chooseProgramming.configure(state = state_)
+        self.program.set(value_)
+
+    ### Sets the state and value of the Stations verify boxes
+    def changeVerify(self, state_, value_):
         self.chooseVerify.configure(state = state_)
+        self.verify.set(value_)
+
+    ### Sets the state and value of the Stations communicate boxes
+    def changeCommunicate(self, state_, value_):
         self.chooseCommunicate.configure(state = state_)
-        self.prog_entry.configure(state = state_)
-        self.out_entry.configure(state = state_)
+        self.communicate.set(value_)
 
     ### Loads objects into correct places
     def packObjects(self):
@@ -265,7 +282,8 @@ class Station():
             self.currentStatus.configure(text = "SUCCESS")
         else:
             self.currentStatus.configure(text = "FAIL")
-        self.changeAllComponents(tk.NORMAL)
+        if self.mode.get() == "c":
+            self.changeAllComponents(tk.NORMAL)
 
     ### Restarts thread with new instantiation
     def createNewThread(self):
@@ -356,7 +374,7 @@ are labelled with both COM ports listed in config.txt\n \
         devices = getCOMPorts()
         # Size of window based on how many stations are present
         root_width = max(410, (len(devices) - 1) * 205)
-        self.parent.geometry(str(root_width) + "x700")
+        self.parent.geometry(str(root_width) + "x900")
         self.can_com_text = StringVar()
         self.can_com_text.set(devices[0])
         self.can_com_text.trace("w", self.updateCommonPort)
@@ -366,10 +384,24 @@ are labelled with both COM ports listed in config.txt\n \
         devicesLoaded = tk.Label(self.frame, text = ("Devices Loaded: " + str(loaded.get())).ljust(long_len), pady = 10)
         self.clearCounter = tk.Button(self.frame, text = "Clear Counter", width = int(long_len / 2), bg = gridColor, height = 2, command = clearDevCounter)
         self.start = tk.Button(self.frame, text = "START", width = long_len, bg = gridColor, height = 3, command = self.startUpload)
+
+        self.modeFrame = tk.Frame(self.frame)
+        MODES = [
+            ("Program All", "p"),
+            ("Verify All", "v"),
+            ("Communicate All", "com"),
+            ("Custom", "c")
+        ]
+        self.mode = StringVar()
+        self.mode.set("c")
+        self.mode.trace("w", self.changeMode)
+        for text, mode in MODES:
+            b = tk.Radiobutton(self.modeFrame, text = text, value = mode, variable = self.mode)
+            b.pack()
         self.packObjects()
         # d[0] is common port; begin Station initalization at 1, passing in unique station id
         for d in range(1, len(devices)):
-            self.stations.append(Station(root, devices[d][0], devices[d][1], self.can_com_text, d))
+            self.stations.append(Station(root, devices[d][0], devices[d][1], self.can_com_text, self.mode, d))
 
     ### Places objects on screen in correct format
     def packObjects(self):
@@ -381,6 +413,7 @@ are labelled with both COM ports listed in config.txt\n \
         self.can_label.pack(side = tk.LEFT)
         self.can_entry.pack(side = tk.LEFT)
         devicesLoaded.pack(side = tk.RIGHT)
+        self.modeFrame.pack(pady = 30, padx = 50)
 
 
     ### Callback for updating IntVar variable represeting successful device programmings
@@ -411,6 +444,23 @@ are labelled with both COM ports listed in config.txt\n \
             if not stat.thread.is_alive():
                 stat.createNewThread()
                 stat.changeAllComponents(tk.DISABLED)
+
+    def changeMode(self, *args):
+        mo = self.mode.get()
+        for stat in self.stations:
+            if mo == "c":
+                stat.changeAllComponents(tk.NORMAL)
+            else:
+                dis = tk.DISABLED
+                p = v = c = 1
+                if mo == "com":
+                    p = 0
+                    v = 0
+                elif mo == "v":
+                    p = 0
+                stat.changeProgramming(tk.DISABLED, p)
+                stat.changeVerify(tk.DISABLED, v)
+                stat.changeCommunicate(tk.DISABLED, c)
 
 ### Instantiate the root window and start the Application
 if __name__ == "__main__":
