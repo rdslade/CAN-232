@@ -1,0 +1,6 @@
+COM(01, 115200)
+DEVICE(LPC1756, 0.000000, 0)
+HARDWARE(BOOTEXEC, 50, 100)
+ERASE(DEVICE, PROTECTISP)
+HEXFILE(C:\Users\Julia\Desktop\GridConnect\LabUpdate\Old_CAN-232\Release 2.01A\can-usb-rs232-2.01A.production.hex, NOCHECKSUMS, NOFILL, PROTECTISP)
+VERIFY(C:\Users\Julia\Desktop\GridConnect\LabUpdate\Old_CAN-232\Release 2.01A\can-usb-rs232-2.01A.production.hex, NOCHECKSUMS)
