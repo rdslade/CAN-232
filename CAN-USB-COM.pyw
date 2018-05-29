@@ -2,7 +2,7 @@ import subprocess
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
-from tkinter import IntVar
+from tkinter import IntVar, StringVar
 from time import sleep
 import serial
 import sys
@@ -69,7 +69,6 @@ class Station():
 
     ### Configures command text file
     def configureTextFiles(self):
-
         self.currentStatus.configure(text = "Configuring executables")
         try:
             file_name = r'CANUSB_Config\CANUSB_CommandFile'+str(self.station_num)+'.txt'
@@ -335,16 +334,18 @@ are labelled with both COM ports listed in config.txt\n \
         # Size of window based on how many stations are present
         root_width = max(410, (len(devices) - 1) * 205)
         self.parent.geometry(str(root_width) + "x700")
-        can_com = devices[0]
-        self.can_label = tk.Label(self.frame, text = "Shared CAN port: " + can_com)
-        long_len = len(self.can_label.cget("text"))
+        self.can_com_text = StringVar()
+        self.can_com_text.set(devices[0])
+        self.can_entry = tk.Entry(self.frame, width = 10, textvariable = self.can_com_text)
+        self.can_label = tk.Label(self.frame, text = "Shared CAN port: ")
+        long_len = len(self.can_entry.get()) + len(self.can_label.cget("text"))
         devicesLoaded = tk.Label(self.frame, text = ("Devices Loaded: " + str(loaded.get())).ljust(long_len), pady = 10)
         self.clearCounter = tk.Button(self.frame, text = "Clear Counter", width = int(long_len / 2), bg = gridColor, height = 2, command = clearDevCounter)
         self.start = tk.Button(self.frame, text = "START", width = long_len, bg = gridColor, height = 3, command = self.startUpload)
         self.packObjects()
         # d[0] is common port; begin Station initalization at 1, passing in unique station id
         for d in range(1, len(devices)):
-            self.stations.append(Station(root, devices[d][0], devices[d][1], can_com, d))
+            self.stations.append(Station(root, devices[d][0], devices[d][1], self.can_com_text.get(), d))
 
     ### Places objects on screen in correct format
     def packObjects(self):
@@ -354,6 +355,7 @@ are labelled with both COM ports listed in config.txt\n \
         self.clearCounter.pack(pady = 5)
         self.start.pack()
         self.can_label.pack(side = tk.LEFT)
+        self.can_entry.pack(side = tk.LEFT)
         devicesLoaded.pack(side = tk.RIGHT)
 
     ### Create and "pack" menu for main root window
