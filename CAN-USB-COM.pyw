@@ -326,6 +326,7 @@ class Application:
         self.parent.title("CAN-232 Programmer")
         self.stations = []
         self.frame = tk.Frame(self.parent)
+        self.configureMenu()
         self.titleLabel = tk.Label(self.frame, text = 'Details/Instructions', font = 10)
         self.instructions = tk.Label(self.frame, text = '- Programming stations \
 are labelled with both COM ports listed in config.txt\n \
@@ -354,6 +355,22 @@ are labelled with both COM ports listed in config.txt\n \
         self.start.pack()
         self.can_label.pack(side = tk.LEFT)
         devicesLoaded.pack(side = tk.RIGHT)
+
+    ### Create and "pack" menu for main root window
+    def configureMenu(self):
+        menubar = tk.Menu(self.parent)
+
+        filemenu = tk.Menu(menubar, tearoff = 0)
+        filemenu.add_command(label = "Open")
+        filemenu.add_command(label = "Print")
+
+        editmenu = tk.Menu(menubar, tearoff = 0)
+        editmenu.add_command(label = "Undo")
+        editmenu.add_command(label = "Redo")
+
+        menubar.add_cascade(label = "File", menu = filemenu)
+        menubar.add_cascade(label = "Edit", menu = editmenu)
+        self.parent.configure(menu = menubar)
 
     ### Trigger function for START button which begins/continues each Station thread
     def startUpload(self):
