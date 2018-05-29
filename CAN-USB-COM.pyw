@@ -14,6 +14,7 @@ import re
 
 gridColor = "#20c0bb"
 entryWidth = 8
+num_coms = 1
 ### class which details the specifics of each individual station programming
 ### threaded such that multiple Station instances can run simultaneously
 class Station():
@@ -169,44 +170,31 @@ class Station():
                     return 1
                 else:
                     addTextToLabel(self.explanation, "\nSUCCESSFUL VERIFICATION")
+                    completeIndSend.set(completeIndSend.get() + 1)
                     return 0
         except serial.SerialException as e:
             return self.getCOMProblem(e)
 
-    ### Test round trip communications (Serial -> CAN -> Serial)
     def testMessages(self):
-        self.currentStatus.configure(text = "Testing Communication")
         try:
-            num_loops = 50
-            main_mod = serial.Serial(self.out_com.get(), baudrate = 115200, timeout = .03)
-            main_mod.write("exit\r".encode()) #ensure this port is in correct mode for communication
-            CAN = serial.Serial(self.can_com.get(), baudrate = 115200, timeout = .03)
-            successes = 0
-            for i in range(0, num_loops):
-                # Send initial serial message
-                main_mod.write(":S123N00ABCD00;".encode())
-                # Recieve and verify incoming messages on other end
-                CAN_recieve = readSerialWord(CAN)
-                if(";" in CAN_recieve):
-                    # If successful, write command back to original end
-                    CAN.write(":S123N00ABCD00;".encode())
-                    Ser_recieve = readSerialWord(main_mod)
-                    if(";" in Ser_recieve):
-                        # If recieved and verified, communication was successful
-                        successes += 1
-            CAN.close()
-            main_mod.close()
-            addTextToLabel(self.explanation, "\n\n"+str(successes)+"/"+str(num_loops)+" successes")
-            # All communications must be successful
-            if successes == num_loops:
-                addTextToLabel(self.explanation, "\nSUCCESSFUL COMMUNICATION")
-                return 0
-            else:
-                addTextToLabel(self.explanation, "\nFAILED COMMUNICATION")
-                return 1
-
+            self.main_mod = serial.Serial(self.out_com.get(), baudrate = 115200, timeout = .03)
         except serial.SerialException as e:
-            return self.getCOMProblem(e)
+            completeIndSend.set(completeIndSend.get() + 1)
+            return self.getCOMProblem(e);
+
+        self.main_mod.write("exit\r".encode()) #ensure this port is in correct mode for communication
+        for i in range(0, num_coms):
+            # Send initial serial message
+            num_str = adjustStationNum(self.station_num)
+            start = time.time()
+            self.main_mod.write((":S123N00ABCD" + num_str + ";").encode())
+        addTextToLabel(self.explanation, "\n\nWrote " + num_str + " to CAN")
+        return 0
+
+    def finishCommunication(self):
+        self.main_mod.close()
+        addTextToLabel(self.explanation, "\nSUCCESSFUL COMMUNICATION")
+        return 0
 
     ### Read the issue COM port and display status of that port
     def getCOMProblem(self, e):
@@ -266,10 +254,10 @@ class Station():
             # Run version verification is successful
             if not flash_fail:
                 verify_fail = self.performVerification()
-        if self.communicate.get():
-            # Run communication test if not failures
-            if not flash_fail and not verify_fail:
-                test_fail = self.testMessages()
+        # if self.communicate.get():
+        #     # Run communication test if not failures
+        #     if not flash_fail and not verify_fail:
+        #         test_fail = self.testMessages()
         if self.program.get() or self.verify.get():
             # Log results
             self.log_run(flash_fail, verify_fail, test_fail)
@@ -350,11 +338,22 @@ def updateDevicesLoaded(*args):
         dev.write(str(loaded.get()))
         dev.close()
 
+def adjustStationNum(num):
+    if len(str(num)) == 1:
+        return "0" + str(num)
+    else:
+        return str(num)
+
 ### high level applications which includes all relevant pieces and instances of
 ### Station class and other widgets
 class Application:
     def __init__(self, parent):
-        global loaded, devicesLoaded, long_len
+        global loaded, devicesLoaded, long_len, completeIndSend
+
+        completeIndSend = IntVar()
+        completeIndSend.set(0)
+        completeIndSend.trace('w', self.testMessages)
+
         loaded = IntVar()
         loaded.set(getNumDevicesLoaded())
         loaded.trace("w", updateDevicesLoaded)
@@ -384,6 +383,7 @@ are labelled with both COM ports listed in config.txt\n \
         devicesLoaded = tk.Label(self.frame, text = ("Devices Loaded: " + str(loaded.get())).ljust(long_len), pady = 10)
         self.clearCounter = tk.Button(self.frame, text = "Clear Counter", width = int(long_len / 2), bg = gridColor, height = 2, command = clearDevCounter)
         self.start = tk.Button(self.frame, text = "START", width = long_len, bg = gridColor, height = 3, command = self.startUpload)
+        self.CAN = serial.Serial(self.can_com_text.get(), baudrate = 115200, timeout = .03)
         self.configureModeOptions()
         self.packObjects()
         # d[0] is common port; begin Station initalization at 1, passing in unique station id
@@ -467,6 +467,27 @@ are labelled with both COM ports listed in config.txt\n \
                 stat.changeProgramming(tk.DISABLED, p)
                 stat.changeVerify(tk.DISABLED, v)
                 stat.changeCommunicate(tk.DISABLED, c)
+
+    def testMessages(self, *args):
+        if completeIndSend.get() == len(self.stations):
+            successes = []
+            for stat in self.stations:
+                stat.testMessages()
+                stat.thread.join()
+            message = readSerialWord(self.CAN)
+            addTextToLabel(self.titleLabel, message)
+            # for stat in self.stations:
+            #     num_str = adjustStationNum(stat.station_num)
+            #     if num_str in message:
+            #         successes.append(num_str)
+            # self.CAN.write(":S123N00ABCD00;".encode())
+            # for stat in self.stations:
+            #     recieve = readSerialWord(stat.main_mod)
+            #     print(recieve)
+            #     if adjustStationNum(stat.station_num) in successes and ";" in recieve:
+            #         stat.finishCommunication()
+            # self.CAN.close()
+
 
 ### Instantiate the root window and start the Application
 if __name__ == "__main__":
