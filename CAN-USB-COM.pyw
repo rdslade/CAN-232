@@ -288,17 +288,28 @@ def getCOMPorts():
 def getNumDevicesLoaded():
     try:
         with open("device_counter.txt", 'r+', encoding = 'utf-8') as dev:
-            return int(dev.readline())
+            ret = int(dev.readline())
+            dev.close()
+            return ret
     except IOError:
         with open("device_counter.txt", "w", encoding = 'utf-8') as file:
             file.write('0')
+            file.close()
             return 0
+
+### Resets device counter
+def clearDevCounter():
+    with open("device_counter.txt", 'w+', encoding = 'utf-8') as dev:
+        dev.write('0')
+        dev.close()
+    loaded.set(0)
+
 ### Callback for updating IntVar variable represeting successful device programmings
 def updateDevicesLoaded(*args):
     devicesLoaded.configure(text = ("Devices Loaded: " + str(loaded.get())).ljust(long_len))
     with open("device_counter.txt", 'w+', encoding = 'utf-8') as dev:
-        dev.write(str(loaded.get()) + "\n")
-
+        dev.write(str(loaded.get()))
+        dev.close()
 ### high level applications which includes all relevant pieces and instances of
 ### Station class and other widgets
 class Application:
@@ -318,7 +329,7 @@ class Application:
         self.titleLabel = tk.Label(self.frame, text = 'Details/Instructions', font = 10)
         self.instructions = tk.Label(self.frame, text = '- Programming stations \
 are labelled with both COM ports listed in config.txt\n \
-            - Click START to begin the upload and verification', pady = 10)
+            - Click START to begin the upload and verification', pady = 5)
         devices = getCOMPorts()
         # Size of window based on how many stations are present
         root_width = max(410, (len(devices) - 1) * 205)
@@ -327,6 +338,7 @@ are labelled with both COM ports listed in config.txt\n \
         self.can_label = tk.Label(self.frame, text = "Shared CAN port: " + can_com)
         long_len = len(self.can_label.cget("text"))
         devicesLoaded = tk.Label(self.frame, text = ("Devices Loaded: " + str(loaded.get())).ljust(long_len), pady = 10)
+        self.clearCounter = tk.Button(self.frame, text = "Clear Counter", width = int(long_len / 2), bg = gridColor, height = 2, command = clearDevCounter)
         self.start = tk.Button(self.frame, text = "START", width = long_len, bg = gridColor, height = 3, command = self.startUpload)
         self.packObjects()
         # d[0] is common port; begin Station initalization at 1, passing in unique station id
@@ -338,6 +350,7 @@ are labelled with both COM ports listed in config.txt\n \
         self.frame.pack(side = tk.TOP)
         self.titleLabel.pack()
         self.instructions.pack()
+        self.clearCounter.pack(pady = 5)
         self.start.pack()
         self.can_label.pack(side = tk.LEFT)
         devicesLoaded.pack(side = tk.RIGHT)
