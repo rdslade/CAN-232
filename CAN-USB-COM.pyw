@@ -146,7 +146,7 @@ class Station():
         self.currentStatus.configure(text = "Verification Stage")
         # Open serial port
         try:
-            buttonSer = serial.Serial(self.out_com.get(), baudrate = 115200, timeout = .1)
+            buttonSer = serial.Serial(self.out_com.get(), baudrate = int(serialBaud.get()), timeout = .1)
             addTextToLabel(self.explanation, "\n\nPress the button")
             #Check button push / boot mode
             checkMode = "start"
@@ -176,7 +176,7 @@ class Station():
 
     def testMessages(self):
         try:
-            self.main_mod = serial.Serial(self.out_com.get(), baudrate = 115200, timeout = .03)
+            self.main_mod = serial.Serial(self.out_com.get(), baudrate = int(serialBaud.get()), timeout = .03)
         except serial.SerialException as e:
             completeIndSend.set(completeIndSend.get() + 1)
             return self.getCOMProblem(e);
@@ -189,7 +189,7 @@ class Station():
             #self.main_mod.flushOutput()
             #self.main_mod.flushInput()
             total += self.main_mod.write((":S123N00ABCD" + num_str + ";").encode())
-        addTextToLabel(self.explanation, "\n\nWrote " + num_str + " to CAN")
+        addTextToLabel(self.explanation, "\n\nWrote to CAN")
         return total
 
     def finishCommunication(self):
@@ -341,13 +341,16 @@ def adjustStationNum(num):
 ### Station class and other widgets
 class Application:
     def __init__(self, parent):
-        global loaded, devicesLoaded, long_len, completeIndSend
+        global loaded, devicesLoaded, long_len, completeIndSend, serialBaud
 
         self.communicationThread = threading.Thread(target = self.testMessages)
 
         completeIndSend = IntVar()
         completeIndSend.set(0)
         completeIndSend.trace('w', self.updateComVar)
+
+        serialBaud = StringVar()
+        serialBaud.set("19200")
 
         loaded = IntVar()
         loaded.set(getNumDevicesLoaded())
@@ -369,6 +372,10 @@ are labelled with both COM ports listed in config.txt\n \
         # Size of window based on how many stations are present
         root_width = max(410, (len(devices) - 1) * 205)
         self.parent.geometry(str(root_width) + "x900+20+20")
+
+        self.serialBaudEntry = tk.Entry(self.frame, width = entryWidth, textvariable = serialBaud)
+        self.serialBaudLabel = tk.Label(text = "Serial Baud: ")
+
         self.can_com_text = StringVar()
         self.can_com_text.set(devices[0])
         self.can_com_text.trace("w", self.updateCommonPort)
@@ -391,10 +398,12 @@ are labelled with both COM ports listed in config.txt\n \
         self.instructions.pack()
         self.clearCounter.pack(pady = 5)
         self.start.pack()
+        #self.serialBaudLabel.pack(side = tk.LEFT)
+        self.serialBaudEntry.pack(pady = 5)
         self.can_label.pack(side = tk.LEFT)
         self.can_entry.pack(side = tk.LEFT)
         devicesLoaded.pack(side = tk.RIGHT)
-        self.modeFrame.pack(pady = 30)
+        self.modeFrame.pack(pady = 15)
 
 
     ### Callback for updating IntVar variable represeting successful device programmings
@@ -464,7 +473,7 @@ are labelled with both COM ports listed in config.txt\n \
 
     def testMessages(self):
         if completeIndSend.get() == len(self.stations):
-            CAN = serial.Serial(self.can_com_text.get(), baudrate = 115200, timeout = .1)
+            CAN = serial.Serial(self.can_com_text.get(), baudrate = int(serialBaud.get()), timeout = .1)
             successes = []
             sleep(.2) #give ports time to leave boot mode
             for stat in self.stations:
@@ -478,7 +487,7 @@ are labelled with both COM ports listed in config.txt\n \
                     successes.append(num_str)
             for stat in self.stations:
                 stat.main_mod.flushInput()
-            CAN = serial.Serial(self.can_com_text.get(), baudrate = 115200, timeout = .1)
+            CAN = serial.Serial(self.can_com_text.get(), baudrate = int(serialBaud.get()), timeout = .1)
             CAN.write(":S123N00ABCD00;".encode())
             for stat in self.stations:
                 stat.test_fail = stat.finishCommunication()
