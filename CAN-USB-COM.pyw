@@ -146,32 +146,31 @@ class Station():
         self.currentStatus.configure(text = "Verification Stage")
         # Open serial port
         try:
-            with serial.Serial(self.out_com.get(), baudrate = 115200, timeout = .1) as buttonSer:
-                addTextToLabel(self.explanation, "\n\nPress the button")
-                #Check button push / boot mode
-                checkMode = "start"
-                while checkMode[2:] != "#0#":
-                    buttonSer.write("\n\r".encode())
-                    checkMode = readSerialWord(buttonSer)
+            buttonSer = serial.Serial(self.out_com.get(), baudrate = 115200, timeout = .1)
+            addTextToLabel(self.explanation, "\n\nPress the button")
+            #Check button push / boot mode
+            checkMode = "start"
+            while checkMode[2:] != "#0#":
+                buttonSer.write("\n\r".encode())
+                checkMode = readSerialWord(buttonSer)
 
-                addTextToLabel(self.explanation, "\nButton Pressed\nVerifying Firmware Version")
-                #Confirm version
-                buttonSer.write("get version\r".encode())
-                self.version = readSerialWord(buttonSer).split(':')[1].split('>')[0]
-                #Get Serial prog_com_number
-                buttonSer.write("get sernum\r".encode())
-                self.sernum = readSerialWord(buttonSer).split(':')[1].split('>')[0]
-                #Exit boot mode
-                buttonSer.write("exit\r".encode())
-                #Clock Serial Port
-                buttonSer.close()
-                if "APP=2.00A" not in self.version:
-                    addTextToLabel(self.explanation, "\n\nWRONG FIRMWARE VERSION")
-                    return 1
-                else:
-                    addTextToLabel(self.explanation, "\nSUCCESSFUL VERIFICATION")
-                    completeIndSend.set(completeIndSend.get() + 1)
-                    return 0
+            addTextToLabel(self.explanation, "\nButton Pressed\nVerifying Firmware Version")
+            #Confirm version
+            buttonSer.write("get version\r".encode())
+            self.version = readSerialWord(buttonSer).split(':')[1].split('>')[0]
+            #Get Serial prog_com_number
+            buttonSer.write("get sernum\r".encode())
+            self.sernum = readSerialWord(buttonSer).split(':')[1].split('>')[0]
+            #Exit boot mode
+            buttonSer.write("exit\r".encode())
+            #Clock Serial Port
+            buttonSer.close()
+            if "APP=2.00A" not in self.version:
+                addTextToLabel(self.explanation, "\n\nWRONG FIRMWARE VERSION")
+                return 1
+            else:
+                addTextToLabel(self.explanation, "\nSUCCESSFUL VERIFICATION")
+                return 0
         except serial.SerialException as e:
             return self.getCOMProblem(e)
 
@@ -183,18 +182,24 @@ class Station():
             return self.getCOMProblem(e);
 
         self.main_mod.write("exit\r".encode()) #ensure this port is in correct mode for communication
+        total = 0
         for i in range(0, num_coms):
             # Send initial serial message
             num_str = adjustStationNum(self.station_num)
-            start = time.time()
-            self.main_mod.write((":S123N00ABCD" + num_str + ";").encode())
+            #self.main_mod.flushOutput()
+            #self.main_mod.flushInput()
+            total += self.main_mod.write((":S123N00ABCD" + num_str + ";").encode())
         addTextToLabel(self.explanation, "\n\nWrote " + num_str + " to CAN")
-        return 0
+        return total
 
     def finishCommunication(self):
-        self.main_mod.close()
-        addTextToLabel(self.explanation, "\nSUCCESSFUL COMMUNICATION")
-        return 0
+        recieve = readSerialWord(self.main_mod)
+        if ";" in recieve:
+            addTextToLabel(self.explanation, "\nSUCCESSFUL COMMUNICATION")
+            return 0
+        else:
+            addTextToLabel(self.explanation, "\nFAILED COMMUNICATION")
+            return 1
 
     ### Read the issue COM port and display status of that port
     def getCOMProblem(self, e):
@@ -246,32 +251,20 @@ class Station():
         self.explanation.configure(text = "")
         # Configre text files signifying programming ports
         self.configureTextFiles()
-        flash_fail = verify_fail = test_fail = 0
+        self.flash_fail = self.verify_fail = self.test_fail = 0
         if self.program.get():
             # Run programming
-            flash_fail = self.runFlashCommand()
+            self.flash_fail = self.runFlashCommand()
         if self.verify.get():
             # Run version verification is successful
-            if not flash_fail:
-                verify_fail = self.performVerification()
-        # if self.communicate.get():
-        #     # Run communication test if not failures
-        #     if not flash_fail and not verify_fail:
-        #         test_fail = self.testMessages()
-        if self.program.get() or self.verify.get():
-            # Log results
-            self.log_run(flash_fail, verify_fail, test_fail)
-        overallFail = flash_fail + verify_fail + test_fail
-        self.stopProgressBar(overallFail)
-        # Update successful iterations
-        if not overallFail:
-            if self.program.get():
-                loaded.set(loaded.get() + 1)
-            self.currentStatus.configure(text = "SUCCESS")
-        else:
-            self.currentStatus.configure(text = "FAIL")
-        if self.mode.get() == "c":
-            self.changeAllComponents(tk.NORMAL)
+            if not self.flash_fail:
+                self.verify_fail = self.performVerification()
+        if self.communicate.get():
+            # Run communication test if not failures
+            if not self.flash_fail and not self.verify_fail:
+                addTextToLabel(self.explanation, "\n\nWaiting")
+                completeIndSend.set(completeIndSend.get() + 1)
+
 
     ### Restarts thread with new instantiation
     def createNewThread(self):
@@ -350,9 +343,11 @@ class Application:
     def __init__(self, parent):
         global loaded, devicesLoaded, long_len, completeIndSend
 
+        self.communicationThread = threading.Thread(target = self.testMessages)
+
         completeIndSend = IntVar()
         completeIndSend.set(0)
-        completeIndSend.trace('w', self.testMessages)
+        completeIndSend.trace('w', self.updateComVar)
 
         loaded = IntVar()
         loaded.set(getNumDevicesLoaded())
@@ -383,7 +378,6 @@ are labelled with both COM ports listed in config.txt\n \
         devicesLoaded = tk.Label(self.frame, text = ("Devices Loaded: " + str(loaded.get())).ljust(long_len), pady = 10)
         self.clearCounter = tk.Button(self.frame, text = "Clear Counter", width = int(long_len / 2), bg = gridColor, height = 2, command = clearDevCounter)
         self.start = tk.Button(self.frame, text = "START", width = long_len, bg = gridColor, height = 3, command = self.startUpload)
-        self.CAN = serial.Serial(self.can_com_text.get(), baudrate = 115200, timeout = .03)
         self.configureModeOptions()
         self.packObjects()
         # d[0] is common port; begin Station initalization at 1, passing in unique station id
@@ -468,26 +462,50 @@ are labelled with both COM ports listed in config.txt\n \
                 stat.changeVerify(tk.DISABLED, v)
                 stat.changeCommunicate(tk.DISABLED, c)
 
-    def testMessages(self, *args):
+    def testMessages(self):
         if completeIndSend.get() == len(self.stations):
+            CAN = serial.Serial(self.can_com_text.get(), baudrate = 115200, timeout = .1)
             successes = []
+            sleep(.2) #give ports time to leave boot mode
             for stat in self.stations:
                 stat.testMessages()
-                stat.thread.join()
-            message = readSerialWord(self.CAN)
-            addTextToLabel(self.titleLabel, message)
-            # for stat in self.stations:
-            #     num_str = adjustStationNum(stat.station_num)
-            #     if num_str in message:
-            #         successes.append(num_str)
-            # self.CAN.write(":S123N00ABCD00;".encode())
-            # for stat in self.stations:
-            #     recieve = readSerialWord(stat.main_mod)
-            #     print(recieve)
-            #     if adjustStationNum(stat.station_num) in successes and ";" in recieve:
-            #         stat.finishCommunication()
-            # self.CAN.close()
+            message = readSerialWord(CAN)
+            arr = message.split(";")
+            CAN.close()
+            for stat, i in zip(self.stations, range(0, len(self.stations))):
+                num_str = adjustStationNum(stat.station_num)
+                if num_str == arr[i][-2:]:
+                    successes.append(num_str)
+            for stat in self.stations:
+                stat.main_mod.flushInput()
+            CAN = serial.Serial(self.can_com_text.get(), baudrate = 115200, timeout = .1)
+            CAN.write(":S123N00ABCD00;".encode())
+            for stat in self.stations:
+                stat.test_fail = stat.finishCommunication()
+            completeIndSend.set(0)
 
+    def updateComVar(self, *args):
+        complete = completeIndSend.get()
+        if complete == len(self.stations):
+            self.communicationThread.start()
+        elif complete == 0:
+            # We have reset the variable and completed all testing
+            # In this case, we must complete the cycle for each station
+            for stat in self.stations:
+                if stat.program.get() or stat.verify.get():
+                    # Log results
+                    stat.log_run(stat.flash_fail, stat.verify_fail, stat.test_fail)
+                overallFail = stat.flash_fail + stat.verify_fail + stat.test_fail
+                stat.stopProgressBar(overallFail)
+                # Update successful iterations
+                if not overallFail:
+                    if stat.program.get():
+                        loaded.set(loaded.get() + 1)
+                    stat.currentStatus.configure(text = "SUCCESS")
+                else:
+                    stat.currentStatus.configure(text = "FAIL")
+                if stat.mode.get() == "c":
+                    stat.changeAllComponents(tk.NORMAL)
 
 ### Instantiate the root window and start the Application
 if __name__ == "__main__":
