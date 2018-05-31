@@ -141,6 +141,11 @@ class Station():
                 self.explanation.configure(text = "\nCould not open " + self.prog_com.get())
             return 1
 
+    def simulateButtonPress(self, port):
+        time.sleep(1)
+        port.write("!!!".encode())
+        time.sleep(1)
+
     ### Check version number of firmware to make sure device was correctly programmed
     def performVerification(self):
         # Begin Verification
@@ -149,12 +154,10 @@ class Station():
         try:
             buttonSer = serial.Serial(self.out_com.get(), baudrate = int(serialBaud.get()), timeout = .1)
             addTextToLabel(self.explanation, "\n\nPress the button")
-            time.sleep(1)
-            buttonSer.write("!!!".encode())
-            time.sleep(1)
             #Check button push / boot mode
             checkMode = "start"
-            while checkMode[2:] != "#0#":
+            while "#0#" not in checkMode:
+                self.simulateButtonPress(buttonSer)
                 buttonSer.write("\n\r".encode())
                 checkMode = readSerialWord(buttonSer)
 
@@ -192,7 +195,7 @@ class Station():
             num_str = adjustStationNum(self.station_num)
             #self.main_mod.flushOutput()
             #self.main_mod.flushInput()
-            total += self.main_mod.write(("1;").encode())
+            total += self.main_mod.write(("1").encode())
         addTextToLabel(self.explanation, "\n\nWrote to CAN")
         return total
 
@@ -484,6 +487,7 @@ are labelled with both COM ports listed in config.txt\n \
             for stat in self.stations:
                 stat.testMessages()
             message = readSerialWord(CAN)
+            print(message)
             arr = message.split(";")
             CAN.close()
             for word in arr:
