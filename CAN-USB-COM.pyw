@@ -186,7 +186,7 @@ class Station():
 
     def testMessages(self):
         try:
-            self.main_mod = serial.Serial(self.out_com.get(), baudrate = 115200, timeout = .03)
+            self.main_mod = serial.Serial(self.out_com.get(), baudrate = 19200, timeout = .03)
         except serial.SerialException as e:
             completeIndSend.set(completeIndSend.get() + 1)
             return self.getCOMProblem(e);
@@ -198,14 +198,14 @@ class Station():
             num_str = adjustStationNum(self.station_num)
             #self.main_mod.flushOutput()
             #self.main_mod.flushInput()
-            total += self.main_mod.write((":S123N00ABCD" + num_str + ";").encode())
+            total += self.main_mod.write(("1").encode())
         addTextToLabel(self.explanation, "\n\nWrote " + num_str + " to CAN")
         return total
 
     def finishCommunication(self):
         recieve = readSerialWord(self.main_mod)
         self.main_mod.close()
-        if ":S123N00ABCD00;" in recieve:
+        if "1" in recieve:
             addTextToLabel(self.explanation, "\nSUCCESSFUL COMMUNICATION")
             return 0
         else:
@@ -493,22 +493,23 @@ are labelled with both COM ports listed in config.txt\n \
                 stat.changeCommunicate(tk.DISABLED, c)
 
     def testMessages(self):
-        CAN = serial.Serial(self.can_com_text.get(), baudrate = 115200, timeout = .1)
+        CAN = serial.Serial(self.can_com_text.get(), baudrate = 19200, timeout = .1)
         successes = []
         sleep(.2) #give ports time to leave boot mode
         for stat in self.stations:
             stat.testMessages()
         message = readSerialWord(CAN)
+        print(message)
         arr = message.split(";")
         CAN.close()
-        for stat, i in zip(self.stations, range(0, len(self.stations))):
-            num_str = adjustStationNum(stat.station_num)
-            if num_str == arr[i][-2:]:
-                successes.append(num_str)
+        if "31" in message:
+            stat.test_fail = 0
+        else:
+            stat.test_fail = 1
         for stat in self.stations:
             stat.main_mod.flushInput()
-        CAN = serial.Serial(self.can_com_text.get(), baudrate = 115200, timeout = .1)
-        CAN.write(":S123N00ABCD00;".encode())
+        CAN = serial.Serial(self.can_com_text.get(), baudrate = 19200, timeout = .1)
+        CAN.write(":S1A1N31;".encode())
         for stat in self.stations:
             stat.test_fail = stat.finishCommunication()
         completeIndSend.set(0)
