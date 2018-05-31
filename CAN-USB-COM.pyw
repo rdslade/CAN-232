@@ -148,6 +148,9 @@ class Station():
         try:
             buttonSer = serial.Serial(self.out_com.get(), baudrate = int(serialBaud.get()), timeout = .1)
             addTextToLabel(self.explanation, "\n\nPress the button")
+            time.sleep(1)
+            buttonSer.write("!!!".encode())
+            time.sleep(1)
             #Check button push / boot mode
             checkMode = "start"
             while checkMode[2:] != "#0#":
@@ -194,7 +197,6 @@ class Station():
 
     def finishCommunication(self):
         recieve = readSerialWord(self.main_mod)
-        print(recieve)
         if "12345678" in recieve:
             addTextToLabel(self.explanation, "\nSUCCESSFUL COMMUNICATION")
             return 0
@@ -483,14 +485,14 @@ are labelled with both COM ports listed in config.txt\n \
             arr = message.split(";")
             CAN.close()
             for word in arr:
-                if not "31" in word:
-                    print("fail")
+                if "31" in word:
+                    stat.test_fail = 0
                 else:
-                    print("succeed")
+                    stat.test_fail = 1
             for stat in self.stations:
                 stat.main_mod.flushInput()
             CAN = serial.Serial(self.can_com_text.get(), baudrate = int(serialBaud.get()), timeout = .1)
-            CAN.write(":S221N3132333435363738".encode())
+            CAN.write(":S221N3132333435363738;".encode())
             for stat in self.stations:
                 stat.test_fail = stat.finishCommunication()
             completeIndSend.set(0)
