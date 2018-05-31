@@ -194,7 +194,8 @@ class Station():
 
     def finishCommunication(self):
         recieve = readSerialWord(self.main_mod)
-        if ";" in recieve:
+        self.main_mod.close()
+        if ":S123N00ABCD00;" in recieve:
             addTextToLabel(self.explanation, "\nSUCCESSFUL COMMUNICATION")
             return 0
         else:
@@ -463,31 +464,33 @@ are labelled with both COM ports listed in config.txt\n \
                 stat.changeCommunicate(tk.DISABLED, c)
 
     def testMessages(self):
-        if completeIndSend.get() == len(self.stations):
-            CAN = serial.Serial(self.can_com_text.get(), baudrate = 115200, timeout = .1)
-            successes = []
-            sleep(.2) #give ports time to leave boot mode
-            for stat in self.stations:
-                stat.testMessages()
-            message = readSerialWord(CAN)
-            arr = message.split(";")
-            CAN.close()
-            for stat, i in zip(self.stations, range(0, len(self.stations))):
-                num_str = adjustStationNum(stat.station_num)
-                if num_str == arr[i][-2:]:
-                    successes.append(num_str)
-            for stat in self.stations:
-                stat.main_mod.flushInput()
-            CAN = serial.Serial(self.can_com_text.get(), baudrate = 115200, timeout = .1)
-            CAN.write(":S123N00ABCD00;".encode())
-            for stat in self.stations:
-                stat.test_fail = stat.finishCommunication()
-            completeIndSend.set(0)
+        #if completeIndSend.get() == len(self.stations):
+        CAN = serial.Serial(self.can_com_text.get(), baudrate = 115200, timeout = .1)
+        successes = []
+        sleep(.2) #give ports time to leave boot mode
+        for stat in self.stations:
+            stat.testMessages()
+        message = readSerialWord(CAN)
+        arr = message.split(";")
+        CAN.close()
+        for stat, i in zip(self.stations, range(0, len(self.stations))):
+            num_str = adjustStationNum(stat.station_num)
+            if num_str == arr[i][-2:]:
+                successes.append(num_str)
+        for stat in self.stations:
+            stat.main_mod.flushInput()
+        CAN = serial.Serial(self.can_com_text.get(), baudrate = 115200, timeout = .1)
+        CAN.write(":S123N00ABCD00;".encode())
+        for stat in self.stations:
+            stat.test_fail = stat.finishCommunication()
+        completeIndSend.set(0)
 
     def updateComVar(self, *args):
         complete = completeIndSend.get()
         if complete == len(self.stations):
-            self.communicationThread.start()
+            if not self.communicationThread.is_alive():
+                self.communicationThread = threading.Thread(target = self.testMessages)
+                self.communicationThread.start()
         elif complete == 0:
             # We have reset the variable and completed all testing
             # In this case, we must complete the cycle for each station
