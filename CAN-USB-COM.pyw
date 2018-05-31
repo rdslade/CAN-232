@@ -15,6 +15,7 @@ import re
 gridColor = "#20c0bb"
 entryWidth = 8
 num_coms = 50
+
 ### class which details the specifics of each individual station programming
 ### threaded such that multiple Station instances can run simultaneously
 class Station():
@@ -197,6 +198,7 @@ class Station():
 
     def finishCommunication(self):
         recieve = readSerialWord(self.main_mod)
+        self.main_mod.close()
         if "12345678" in recieve:
             addTextToLabel(self.explanation, "\nSUCCESSFUL COMMUNICATION")
             return 0
@@ -492,10 +494,11 @@ are labelled with both COM ports listed in config.txt\n \
             for stat in self.stations:
                 stat.main_mod.flushInput()
             CAN = serial.Serial(self.can_com_text.get(), baudrate = int(serialBaud.get()), timeout = .1)
-            CAN.write(":S221N3132333435363738;".encode())
+            CAN.write(":S1A1N3132333435363738;".encode())
             for stat in self.stations:
                 stat.test_fail = stat.finishCommunication()
             completeIndSend.set(0)
+            return 0
 
     def updateComVar(self, *args):
         complete = completeIndSend.get()
