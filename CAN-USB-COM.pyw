@@ -144,17 +144,23 @@ class Station():
                 self.explanation.configure(text = "\nCould not open " + self.prog_com.get())
             return 1
 
+    def simulateButtonPress(self, port):
+        time.sleep(1)
+        port.write("!!!".encode())
+        time.sleep(1)
+
     ### Check version number of firmware to make sure device was correctly programmed
     def performVerification(self):
         # Begin Verification
         self.currentStatus.configure(text = "Verification Stage")
         # Open serial port
         try:
-            buttonSer = serial.Serial(self.out_com.get(), baudrate = 115200, timeout = .1)
+            buttonSer = serial.Serial(self.out_com.get(), baudrate = 19200, timeout = .1)
             addTextToLabel(self.explanation, "\n\nPress the button")
             #Check button push / boot mode
             checkMode = "start"
-            while checkMode[2:] != "#0#":
+            while "#0#" not in checkMode:
+                self.simulateButtonPress(buttonSer)
                 buttonSer.write("\n\r".encode())
                 checkMode = readSerialWord(buttonSer)
 
