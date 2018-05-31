@@ -16,6 +16,9 @@ from tkinter.filedialog import askopenfilename
 gridColor = "#20c0bb"
 entryWidth = 8
 num_coms = 1
+master_transmit = slave_recieve = "221"
+master_recieve = slave_transmit = "1A1"
+
 ### class which details the specifics of each individual station programming
 ### threaded such that multiple Station instances can run simultaneously
 class Station():
@@ -349,7 +352,6 @@ class Application:
         global loaded, devicesLoaded, long_len, completeIndSend
 
         self.communicationThread = threading.Thread(target = self.testMessages)
-
         completeIndSend = IntVar()
         completeIndSend.set(0)
         completeIndSend.trace('w', self.updateComVar)
@@ -372,7 +374,7 @@ are labelled with both COM ports listed in config.txt\n \
             - Click START to begin the upload and verification', pady = 5)
         devices = getCOMPorts()
         # Size of window based on how many stations are present
-        root_width = max(600, (len(devices) - 1) * 205)
+        root_width = max(700, (len(devices) - 1) * 205)
         self.parent.geometry(str(root_width) + "x900+20+20")
         self.can_com_text = StringVar()
         self.can_com_text.set(devices[0])
@@ -385,6 +387,7 @@ are labelled with both COM ports listed in config.txt\n \
         self.clearCounter = tk.Button(self.buttonFrame, text = "Clear Counter", width = int(long_len / 2), bg = gridColor, height = 2, command = clearDevCounter)
         self.start = tk.Button(self.buttonFrame, text = "START", width = long_len, bg = gridColor, height = 3, command = self.startUpload)
         self.configureModeOptions()
+        self.configureDeviceOptions()
         self.packObjects()
         # d[0] is common port; begin Station initalization at 1, passing in unique station id
         for d in range(1, len(devices)):
@@ -397,6 +400,7 @@ are labelled with both COM ports listed in config.txt\n \
         self.instructions.pack()
         self.can_label.pack(side = tk.LEFT)
         self.can_entry.pack(side = tk.LEFT)
+        self.deviceFrame.pack(side = tk.LEFT, padx = 10)
         self.clearCounter.pack(pady = 5)
         self.start.pack()
         self.buttonFrame.pack(side = tk.LEFT, padx = 20)
@@ -440,6 +444,19 @@ are labelled with both COM ports listed in config.txt\n \
         self.mode.trace("w", self.changeMode)
         for text, mode in MODES:
             b = tk.Radiobutton(self.modeFrame, text = text, value = mode, variable = self.mode)
+            b.pack()
+
+    def configureDeviceOptions(self):
+        self.deviceFrame = tk.Frame(self.frame)
+        CONFIGS = [
+            ("Normal", "normal"),
+            ("Master", "master"),
+            ("Slave", "slave")
+        ]
+        self.deviceType = StringVar()
+        self.deviceType.set("normal")
+        for text, devType in CONFIGS:
+            b = tk.Radiobutton(self.deviceFrame, text = text, value = devType, variable = self.deviceType)
             b.pack()
 
     ### Trigger function for START button which begins/continues each Station thread
