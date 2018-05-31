@@ -11,6 +11,7 @@ import datetime
 import threading
 from multiprocessing import Queue, Process
 import re
+from tkinter.filedialog import askopenfilename
 
 gridColor = "#20c0bb"
 entryWidth = 8
@@ -265,6 +266,9 @@ class Station():
             if not self.flash_fail and not self.verify_fail:
                 addTextToLabel(self.explanation, "\n\nWaiting")
                 completeIndSend.set(completeIndSend.get() + 1)
+        else:
+            # Process is complete and must be reset
+            completeIndSend.set(0)
 
 
     ### Restarts thread with new instantiation
@@ -368,7 +372,7 @@ are labelled with both COM ports listed in config.txt\n \
             - Click START to begin the upload and verification', pady = 5)
         devices = getCOMPorts()
         # Size of window based on how many stations are present
-        root_width = max(410, (len(devices) - 1) * 205)
+        root_width = max(600, (len(devices) - 1) * 205)
         self.parent.geometry(str(root_width) + "x900+20+20")
         self.can_com_text = StringVar()
         self.can_com_text.set(devices[0])
@@ -377,8 +381,9 @@ are labelled with both COM ports listed in config.txt\n \
         self.can_label = tk.Label(self.frame, text = "Shared CAN port: ")
         long_len = len(self.can_entry.get()) + len(self.can_label.cget("text"))
         devicesLoaded = tk.Label(self.frame, text = ("Devices Loaded: " + str(loaded.get())).ljust(long_len), pady = 10)
-        self.clearCounter = tk.Button(self.frame, text = "Clear Counter", width = int(long_len / 2), bg = gridColor, height = 2, command = clearDevCounter)
-        self.start = tk.Button(self.frame, text = "START", width = long_len, bg = gridColor, height = 3, command = self.startUpload)
+        self.buttonFrame = tk.Frame(self.frame)
+        self.clearCounter = tk.Button(self.buttonFrame, text = "Clear Counter", width = int(long_len / 2), bg = gridColor, height = 2, command = clearDevCounter)
+        self.start = tk.Button(self.buttonFrame, text = "START", width = long_len, bg = gridColor, height = 3, command = self.startUpload)
         self.configureModeOptions()
         self.packObjects()
         # d[0] is common port; begin Station initalization at 1, passing in unique station id
@@ -390,12 +395,13 @@ are labelled with both COM ports listed in config.txt\n \
         self.frame.pack(side = tk.TOP)
         self.titleLabel.pack()
         self.instructions.pack()
-        self.clearCounter.pack(pady = 5)
-        self.start.pack()
         self.can_label.pack(side = tk.LEFT)
         self.can_entry.pack(side = tk.LEFT)
+        self.clearCounter.pack(pady = 5)
+        self.start.pack()
+        self.buttonFrame.pack(side = tk.LEFT, padx = 20)
         devicesLoaded.pack(side = tk.RIGHT)
-        self.modeFrame.pack(pady = 30)
+        self.modeFrame.pack(padx =10)
 
 
     ### Callback for updating IntVar variable represeting successful device programmings
@@ -464,7 +470,6 @@ are labelled with both COM ports listed in config.txt\n \
                 stat.changeCommunicate(tk.DISABLED, c)
 
     def testMessages(self):
-        #if completeIndSend.get() == len(self.stations):
         CAN = serial.Serial(self.can_com_text.get(), baudrate = 115200, timeout = .1)
         successes = []
         sleep(.2) #give ports time to leave boot mode
