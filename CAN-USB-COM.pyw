@@ -14,7 +14,7 @@ import re
 
 gridColor = "#20c0bb"
 entryWidth = 8
-num_coms = 1
+num_coms = 50
 ### class which details the specifics of each individual station programming
 ### threaded such that multiple Station instances can run simultaneously
 class Station():
@@ -188,13 +188,14 @@ class Station():
             num_str = adjustStationNum(self.station_num)
             #self.main_mod.flushOutput()
             #self.main_mod.flushInput()
-            total += self.main_mod.write((":S123N00ABCD" + num_str + ";").encode())
+            total += self.main_mod.write(("1;").encode())
         addTextToLabel(self.explanation, "\n\nWrote to CAN")
         return total
 
     def finishCommunication(self):
         recieve = readSerialWord(self.main_mod)
-        if ";" in recieve:
+        print(recieve)
+        if "12345678" in recieve:
             addTextToLabel(self.explanation, "\nSUCCESSFUL COMMUNICATION")
             return 0
         else:
@@ -481,14 +482,15 @@ are labelled with both COM ports listed in config.txt\n \
             message = readSerialWord(CAN)
             arr = message.split(";")
             CAN.close()
-            for stat, i in zip(self.stations, range(0, len(self.stations))):
-                num_str = adjustStationNum(stat.station_num)
-                if num_str == arr[i][-2:]:
-                    successes.append(num_str)
+            for word in arr:
+                if not "31" in word:
+                    print("fail")
+                else:
+                    print("succeed")
             for stat in self.stations:
                 stat.main_mod.flushInput()
             CAN = serial.Serial(self.can_com_text.get(), baudrate = int(serialBaud.get()), timeout = .1)
-            CAN.write(":S123N00ABCD00;".encode())
+            CAN.write(":S221N3132333435363738".encode())
             for stat in self.stations:
                 stat.test_fail = stat.finishCommunication()
             completeIndSend.set(0)
