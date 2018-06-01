@@ -19,6 +19,7 @@ num_coms = 1
 master_transmit = slave_recieve = "221"
 master_recieve = slave_transmit = "1A1"
 baudrate = 115200
+advanced = 1
 
 ### class which details the specifics of each individual station programming
 ### threaded such that multiple Station instances can run simultaneously
@@ -61,6 +62,8 @@ class Station():
         self.prog_label = tk.Label(self.prog, text = "Programming Port: ")
         self.out_label = tk.Label(self.out, text = "Display Port: ")
 
+        self.station_label = tk.Label(self.setup, text = self.prog_com.get() + "\\" + self.out_com.get())
+
         self.statusSpace = tk.LabelFrame(self.frame, width = 200, height = 250)
         self.currentStatus = tk.Label(self.statusSpace, text = "", width = 25, pady = 10)
         self.progressBar = ttk.Progressbar(self.statusSpace, mode = 'determinate', length = 125)
@@ -97,25 +100,31 @@ class Station():
 
     ### Loads objects into correct places
     def packObjects(self):
-        self.prog_label.pack(side = tk.LEFT)
-        self.prog_entry.pack(side = tk.LEFT)
-        self.out_label.pack(side = tk.LEFT)
-        self.out_entry.pack(side = tk.LEFT)
-        self.prog.pack(pady = 5)
-        self.out.pack()
+        if advanced:
+            self.prog_label.pack(side = tk.LEFT)
+            self.prog_entry.pack(side = tk.LEFT)
+            self.out_label.pack(side = tk.LEFT)
+            self.out_entry.pack(side = tk.LEFT)
+            self.prog.pack(pady = 5)
+            self.out.pack()
+
+        if not advanced:
+            self.station_label.pack()
+
         self.setup.pack()
         self.statusSpace.pack()
         self.currentStatus.pack()
         self.progressBar.pack()
         self.explanation.pack()
-        self.barrier.pack(fill = "x", expand = True)
-        self.chooseLabel.pack()
-        self.chooseProgramming.pack()
-        self.chooseVerify.pack()
-        self.chooseCommunicate.pack()
-        self.chooseProgramming.select()
-        self.chooseVerify.select()
-        self.chooseCommunicate.select()
+        if advanced:
+            self.barrier.pack(fill = "x", expand = True)
+            self.chooseLabel.pack()
+            self.chooseProgramming.pack()
+            self.chooseVerify.pack()
+            self.chooseCommunicate.pack()
+            self.chooseProgramming.select()
+            self.chooseVerify.select()
+            self.chooseCommunicate.select()
         self.frame.pack(side = tk.LEFT, padx = 10)
 
     ### Configures command text file
@@ -309,21 +318,18 @@ def addTextToLabel(label, textToAdd):
 ### Read COM ports from config file and returned organized lists of ports
 def getCOMPorts():
     devices = []
-    try:
-        with open("Config\can_config.txt", 'r+', encoding = 'utf-8') as common:
-            devices.append(common.readline().split()[0]) #first device is the common port
-        with open("Config\ports_config.txt", 'r+',encoding='utf-8' ) as mp:
-            mp.readline() #first line is instructions
-            for line in mp.readlines():
-                ports = []
-                for p in line.split():
-                    # Add all COM ports associated with one device
-                    if "COM" in p:
-                        ports.append(p)
-                devices.append(ports)
-        return devices
-    except IOError:
-        print("hi") #TODO
+    with open("Config\can_config.txt", 'r+', encoding = 'utf-8') as common:
+        devices.append(common.readline().split()[0]) #first device is the common port
+    with open("Config\ports_config.txt", 'r+',encoding='utf-8' ) as mp:
+        mp.readline() #first line is instructions
+        for line in mp.readlines():
+            ports = []
+            for p in line.split():
+                # Add all COM ports associated with one device
+                if "COM" in p:
+                    ports.append(p)
+            devices.append(ports)
+    return devices
 
 ### Reads counter file and returns value in the file
 def getNumDevicesLoaded():
@@ -401,6 +407,8 @@ are labelled with both COM ports listed in config.txt\n \
         self.can_com_text.trace("w", self.updateCommonPort)
         self.can_entry = tk.Entry(self.frame, width = entryWidth, textvariable = self.can_com_text)
         self.can_label = tk.Label(self.frame, text = "Shared CAN port: ")
+        if not advanced:
+            addTextToLabel(self.can_label, self.can_com_text.get())
         long_len = len(self.can_entry.get()) + len(self.can_label.cget("text"))
         devicesLoaded = tk.Label(self.frame, text = ("Devices Loaded: " + str(loaded.get())).ljust(long_len), pady = 10)
         self.buttonFrame = tk.Frame(self.frame)
@@ -419,7 +427,8 @@ are labelled with both COM ports listed in config.txt\n \
         self.titleLabel.pack()
         self.instructions.pack()
         self.can_label.pack(side = tk.LEFT)
-        self.can_entry.pack(side = tk.LEFT)
+        if advanced:
+            self.can_entry.pack(side = tk.LEFT)
         self.deviceFrame.pack(side = tk.LEFT, padx = 10)
         self.clearCounter.pack(pady = 5)
         self.start.pack()
