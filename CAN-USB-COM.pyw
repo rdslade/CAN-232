@@ -133,7 +133,7 @@ class Station():
             stations_with_com.remove(self)
         except ValueError as e:
             pass
-        completeIndSend.set(completeIndSend.get())
+        completeIndSend.set(completeIndSend.get() + 1)
         lock.release()
 
 
@@ -227,7 +227,7 @@ class Station():
             if not self.main_mod.is_open:
                 self.main_mod.open()
         except serial.SerialException as e:
-            completeIndSend.set(completeIndSend.get() + 1)
+            self.removeFromComList()
             return getCOMProblem(e, self);
 
         self.main_mod.write("exit\r".encode()) #ensure this port is in correct mode for communication
@@ -665,11 +665,12 @@ are labelled with both COM ports listed in config.txt\n \
     def updateComVar(self, *args):
         global stations_with_com
         complete = completeIndSend.get()
-        if complete == len(stations_with_com):
+        if complete == len(self.stations):
             if not self.communicationThread.is_alive():
                 self.communicationThread = threading.Thread(target = self.testMessages)
                 self.communicationThread.start()
         elif complete == 0:
+            for stat in self.stations:
             # We have reset the variable and completed all testing
             # In this case, we must complete the cycle for each station
             for stat in self.stations:
