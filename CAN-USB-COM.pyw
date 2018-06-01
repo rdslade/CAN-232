@@ -198,7 +198,7 @@ class Station():
             num_str = adjustStationNum(self.station_num)
             #self.main_mod.flushOutput()
             #self.main_mod.flushInput()
-            total += self.main_mod.write(("1").encode())
+            total += self.main_mod.write(num_str.encode())
         addTextToLabel(self.explanation, "\n\nWrote " + num_str + " to CAN")
         return total
 
@@ -499,19 +499,30 @@ are labelled with both COM ports listed in config.txt\n \
         for stat in self.stations:
             stat.testMessages()
         message = readSerialWord(CAN)
-        print(message)
-        arr = message.split(";")
         CAN.close()
-        if "31" in message:
-            stat.test_fail = 0
-        else:
-            stat.test_fail = 1
         for stat in self.stations:
+            num_str = adjustStationNum(stat.station_num)
+            firstChar = str(hex(ord(num_str[0])))
+            secondChar = str(hex(ord(num_str[1])))
+            if firstChar[-2:] in message and secondChar[-2:] in message:
+                stat.test_fail = 0
+            else:
+                stat.test_fail = 1
+                addTextToLabel(stat.explanation, "\nFailed read at CAN port")
             stat.main_mod.flushInput()
         CAN = serial.Serial(self.can_com_text.get(), baudrate = 19200, timeout = .1)
-        CAN.write(":S1A1N31;".encode())
+        CANWrite = ":S"
+        if self.deviceType.get() == "master":
+            CANWrite += master_recieve + "N31;"
+        elif self.deviceType.get() == "slave":
+            CANWrite += slave_recieve + "N31;"
+        else:
+            # Then device is configured normally
+            CANWrite += "123N00ABCD01;"
+        CAN.write(CANWrite.encode())
         for stat in self.stations:
-            stat.test_fail = stat.finishCommunication()
+            if not stat.test_fail:
+                stat.test_fail = stat.finishCommunication()
         completeIndSend.set(0)
 
     def updateComVar(self, *args):
