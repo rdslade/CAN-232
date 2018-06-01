@@ -20,7 +20,7 @@ num_coms = 1
 master_transmit = slave_recieve = "221"
 master_recieve = slave_transmit = "1A1"
 baudrate = 115200
-
+lock = threading.Lock()
 ### class which details the specifics of each individual station programming
 ### threaded such that multiple Station instances can run simultaneously
 class Station():
@@ -127,6 +127,16 @@ class Station():
             self.chooseCommunicate.select()
         self.frame.pack(side = tk.LEFT, padx = 10)
 
+    def removeFromComList(self):
+        lock.acquire()
+        try:
+            stations_with_com.remove(self)
+        except ValueError as e:
+            pass
+        completeIndSend.set(completeIndSend.get())
+        lock.release()
+
+
     ### Configures command text file
     def configureTextFiles(self):
         self.currentStatus.configure(text = "Configuring executables")
@@ -159,6 +169,7 @@ class Station():
         except subprocess.CalledProcessError as e:
             if "Unable to communicate".encode() in e.output:
                 self.explanation.configure(text = "\nCould not open " + self.prog_com.get())
+            self.removeFromComList()
             return 1
 
     ### Used to put the device at the parameter port in to bootloader mode
@@ -177,10 +188,16 @@ class Station():
             addTextToLabel(self.explanation, "\n\nPress the button")
             #Check button push / boot mode
             checkMode = "start"
+            startAttempt = time.time()
             while "#0#" not in checkMode:
                 self.simulateButtonPress(buttonSer)
                 buttonSer.write("\n\r".encode())
                 checkMode = readSerialWord(buttonSer)
+                if time.time() - startAttempt > 10:
+                    self.removeFromComList()
+                    addTextToLabel(self.explanation, "\nTimed out waiting for button\nFAILED VERIFICATION")
+                    return 1
+
 
             addTextToLabel(self.explanation, "\nButton Pressed\nVerifying Firmware Version")
             #Confirm version
@@ -200,6 +217,7 @@ class Station():
                 addTextToLabel(self.explanation, "\nSUCCESSFUL VERIFICATION")
                 return 0
         except serial.SerialException as e:
+            self.removeFromComList()
             return getCOMProblem(e, self)
 
     ### Send messages from serial port to CAN
@@ -291,9 +309,7 @@ class Station():
             if not self.flash_fail and not self.verify_fail:
                 addTextToLabel(self.explanation, "\n\nWaiting")
                 completeIndSend.set(completeIndSend.get() + 1)
-        else:
-            # Process is complete and must be reset
-            completeIndSend.set(0)
+
 
 
     ### Restarts thread with new instantiation
@@ -395,7 +411,7 @@ def changePermissions():
 ### Station class and other widgets
 class Application:
     def __init__(self, parent):
-        global loaded, devicesLoaded, long_len, completeIndSend, advanced
+        global loaded, devicesLoaded, long_len, completeIndSend, advanced, stations_with_com
 
         self.communicationThread = threading.Thread(target = self.testMessages)
         completeIndSend = IntVar()
@@ -415,6 +431,7 @@ class Application:
         self.parent = parent
         self.parent.title("CAN-232 Programmer")
         self.stations = []
+        stations_with_com = []
         self.frame = tk.Frame(self.parent)
         self.configureMenu()
         self.titleLabel = tk.Label(self.frame, text = 'Details/Instructions', font = 10)
@@ -529,6 +546,8 @@ are labelled with both COM ports listed in config.txt\n \
     ### Trigger function for START button which begins/continues each Station thread
     def startUpload(self):
         for stat in self.stations:
+            if stat.communicate.get():
+                stations_with_com.append(stat)
             if not stat.thread.is_alive():
                 stat.createNewThread()
                 stat.changeAllComponents(tk.DISABLED)
@@ -559,13 +578,13 @@ are labelled with both COM ports listed in config.txt\n \
     def testSerialToCAN(self):
         self.CAN = serial.Serial(self.can_com_text.get(), baudrate = baudrate, timeout = .1)
         localFail = 0
-        for stat in self.stations:
+        for stat in stations_with_com:
             # Only perform the initial com test if the device has not already passed
             if stat.tempSerialTest:
                 localFail += stat.startCommunication()
         message = readSerialWord(self.CAN)
         self.CAN.close()
-        for stat in self.stations:
+        for stat in stations_with_com:
             # Only check if the CAN read is successful if device has not already passed
             if stat.tempSerialTest:
                 num_str = adjustStationNum(stat.station_num)
@@ -598,12 +617,12 @@ are labelled with both COM ports listed in config.txt\n \
         else:
             # Device is configured normally
             CANWrite += "123N00ABCD01;"
-        for stat in self.stations:
+        for stat in stations_with_com:
             if stat.tempCANTest:
                 # Open device port for reading if it has not passed the CAN write test
                 stat.main_mod.open()
         self.CAN.write(CANWrite.encode())
-        for stat in self.stations:
+        for stat in stations_with_com:
             # Perform the final verfication if device has not passed CAN test
             if stat.tempCANTest:
                 stat.tempCANTest = stat.finishCommunication()
@@ -630,13 +649,13 @@ are labelled with both COM ports listed in config.txt\n \
             while testCounter < 5 and failCANToSerial != 0:
                 failCANToSerial = self.testCANToSerial()
                 testCounter += 1
-            for stat in self.stations:
+            for stat in stations_with_com:
                 if not stat.test_fail:
                     addTextToLabel(stat.explanation, "\nSUCCESSFUL COMMUNICATION")
                 else:
                     addTextToLabel(stat.explanation, "\nFAILED COMMUNICATION")
         except serial.SerialException as e:
-            for stat in self.stations:
+            for stat in stations_with_com:
                 getCOMProblem(e, stat)
                 stat.test_fail = 1
         # Reset count of devices (triggers logging and resetting the device)
@@ -644,8 +663,9 @@ are labelled with both COM ports listed in config.txt\n \
 
     ### Checks how many devices have reached the point of a com test and acts accordingly
     def updateComVar(self, *args):
+        global stations_with_com
         complete = completeIndSend.get()
-        if complete == len(self.stations):
+        if complete == len(stations_with_com):
             if not self.communicationThread.is_alive():
                 self.communicationThread = threading.Thread(target = self.testMessages)
                 self.communicationThread.start()
@@ -667,6 +687,7 @@ are labelled with both COM ports listed in config.txt\n \
                     stat.currentStatus.configure(text = "FAIL")
                 if stat.mode.get() == "c":
                     stat.changeAllComponents(tk.NORMAL)
+            stations_with_com = []
 
 ### Instantiate the root window and start the Application
 if __name__ == "__main__":
