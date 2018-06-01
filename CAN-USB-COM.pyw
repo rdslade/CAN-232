@@ -40,7 +40,7 @@ class Station():
         self.out_com.set(out_com_)
 
         self.main_mod = serial.Serial()
-        self.main_mod.baudrate = 19200
+        self.main_mod.baudrate = baudrate
         self.main_mod.port = self.out_com.get()
         self.main_mod.timeout = .03
 
@@ -173,7 +173,7 @@ class Station():
         self.currentStatus.configure(text = "Verification Stage")
         # Open serial port
         try:
-            buttonSer = serial.Serial(self.out_com.get(), baudrate = 19200, timeout = .1)
+            buttonSer = serial.Serial(self.out_com.get(), baudrate = baudrate, timeout = .1)
             addTextToLabel(self.explanation, "\n\nPress the button")
             #Check button push / boot mode
             checkMode = "start"
@@ -498,6 +498,8 @@ are labelled with both COM ports listed in config.txt\n \
             baudrate = 19200
         else:
             baudrate = 115200
+        for stat in self.stations:
+            stat.main_mod.baudrate = baudrate
 
     ### Trigger function for START button which begins/continues each Station thread
     def startUpload(self):
@@ -530,7 +532,7 @@ are labelled with both COM ports listed in config.txt\n \
 
     ### Repeatable procedure to begin the communication test
     def testSerialToCAN(self):
-        self.CAN = serial.Serial(self.can_com_text.get(), baudrate = 19200, timeout = .1)
+        self.CAN = serial.Serial(self.can_com_text.get(), baudrate = baudrate, timeout = .1)
         localFail = 0
         for stat in self.stations:
             # Only perform the initial com test if the device has not already passed
@@ -559,7 +561,7 @@ are labelled with both COM ports listed in config.txt\n \
 
     ### Repeatable procedure to end communication test
     def testCANToSerial(self):
-        self.CAN = serial.Serial(self.can_com_text.get(), baudrate = 19200, timeout = .1)
+        self.CAN = serial.Serial(self.can_com_text.get(), baudrate = baudrate, timeout = .1)
         localFail = 0
         CANWrite = ":S"
         # Must specify what kind of CAN write should be done since
