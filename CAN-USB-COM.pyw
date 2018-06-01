@@ -18,6 +18,7 @@ entryWidth = 8
 num_coms = 1
 master_transmit = slave_recieve = "221"
 master_recieve = slave_transmit = "1A1"
+baudrate = 115200
 
 ### class which details the specifics of each individual station programming
 ### threaded such that multiple Station instances can run simultaneously
@@ -470,9 +471,18 @@ are labelled with both COM ports listed in config.txt\n \
         ]
         self.deviceType = StringVar()
         self.deviceType.set("normal")
+        self.deviceType.trace("w", self.changeBaudRate)
         for text, devType in CONFIGS:
             b = tk.Radiobutton(self.deviceFrame, text = text, value = devType, variable = self.deviceType)
             b.pack()
+
+    def changeBaudRate(self, *args):
+        global baudrate
+        type = self.deviceType.get()
+        if(type == "master" or type == "slave"):
+            baudrate = 19200
+        else:
+            baudrate = 115200
 
     ### Trigger function for START button which begins/continues each Station thread
     def startUpload(self):
@@ -480,6 +490,8 @@ are labelled with both COM ports listed in config.txt\n \
             if not stat.thread.is_alive():
                 stat.createNewThread()
                 stat.changeAllComponents(tk.DISABLED)
+                stat.tempCANTest = 1
+                stat.tempSerialTest = 1
 
     ### Set the state and value of options given the current Mode
     def changeMode(self, *args):
