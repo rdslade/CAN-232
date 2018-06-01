@@ -30,12 +30,12 @@ class Station():
 
         self.sernum = ""
         self.version = ""
-        self.tempSerialTest = 1
-        self.tempCANTest = 1
+        self.tempSerialTest = 1 #failure indicator for first part of com test
+        self.tempCANTest = 1 #failure indicator for second part of com test
 
-        self.prog_com = StringVar()
+        self.prog_com = StringVar() #programming port
         self.prog_com.set(prog_com_)
-        self.out_com = StringVar()
+        self.out_com = StringVar() #display port
         self.out_com.set(out_com_)
 
         self.main_mod = serial.Serial()
@@ -152,6 +152,7 @@ class Station():
                 self.explanation.configure(text = "\nCould not open " + self.prog_com.get())
             return 1
 
+    ### Used to put the device at the parameter port in to bootloader mode
     def simulateButtonPress(self, port):
         time.sleep(1)
         port.write("!!!".encode())
@@ -192,7 +193,8 @@ class Station():
         except serial.SerialException as e:
             return getCOMProblem(e, self)
 
-    def testMessages(self):
+    ### Send messages from serial port to CAN
+    def startCommunication(self):
         self.currentStatus.configure(text = "Testing Communication")
         try:
             if not self.main_mod.is_open:
@@ -212,6 +214,7 @@ class Station():
         addTextToLabel(self.explanation, "\nWrote " + num_str + " to CAN")
         return 0
 
+    ### Check CAN message and close serial port
     def finishCommunication(self):
         recieve = readSerialWord(self.main_mod)
         self.main_mod.close()
@@ -349,6 +352,7 @@ def updateDevicesLoaded(*args):
         dev.write(str(loaded.get()))
         dev.close()
 
+### Adjusts one digit number to have appended beginning '0'
 def adjustStationNum(num):
     if len(str(num)) == 1:
         return "0" + str(num)
@@ -462,6 +466,7 @@ are labelled with both COM ports listed in config.txt\n \
             b = tk.Radiobutton(self.modeFrame, text = text, value = mode, variable = self.mode)
             b.pack()
 
+    ### Create device types options and pack into frame
     def configureDeviceOptions(self):
         self.deviceFrame = tk.Frame(self.frame)
         CONFIGS = [
@@ -476,6 +481,7 @@ are labelled with both COM ports listed in config.txt\n \
             b = tk.Radiobutton(self.deviceFrame, text = text, value = devType, variable = self.deviceType)
             b.pack()
 
+    ### Changes global baud rate depending on device type
     def changeBaudRate(self, *args):
         global baudrate
         type = self.deviceType.get()
@@ -513,44 +519,56 @@ are labelled with both COM ports listed in config.txt\n \
                 stat.changeVerify(tk.DISABLED, v)
                 stat.changeCommunicate(tk.DISABLED, c)
 
+    ### Repeatable procedure to begin the communication test
     def testSerialToCAN(self):
         self.CAN = serial.Serial(self.can_com_text.get(), baudrate = 19200, timeout = .1)
-        localFail = 0;
+        localFail = 0
         for stat in self.stations:
+            # Only perform the initial com test if the device has not already passed
             if stat.tempSerialTest:
-                localFail += stat.testMessages()
+                localFail += stat.startCommunication()
         message = readSerialWord(self.CAN)
         self.CAN.close()
         for stat in self.stations:
+            # Only check if the CAN read is successful if device has not already passed
             if stat.tempSerialTest:
                 num_str = adjustStationNum(stat.station_num)
+                # Hex string representing each char from the station id
                 firstChar = str(hex(ord(num_str[0])))
                 secondChar = str(hex(ord(num_str[1])))
+                # Check to see if each station id appears in message sent
                 if firstChar[-2:] in message and secondChar[-2:] in message:
+                    # Device DID NOT fail if successful CAN read
                     stat.tempSerialTest = 0
                     addTextToLabel(stat.explanation, " (Success)")
                 else:
                     stat.tempSerialTest = 1
                     localFail += 1
                     addTextToLabel(stat.explanation, " (Fail)")
+        # Returns if this individual CAN test failed
         return localFail
 
+    ### Repeatable procedure to end communication test
     def testCANToSerial(self):
         self.CAN = serial.Serial(self.can_com_text.get(), baudrate = 19200, timeout = .1)
         localFail = 0
         CANWrite = ":S"
+        # Must specify what kind of CAN write should be done since
+        # applicable devices may be of specific type
         if self.deviceType.get() == "master":
             CANWrite += master_recieve + "N31;"
         elif self.deviceType.get() == "slave":
             CANWrite += slave_recieve + "N31;"
         else:
-            # Then device is configured normally
+            # Device is configured normally
             CANWrite += "123N00ABCD01;"
         for stat in self.stations:
             if stat.tempCANTest:
+                # Open device port for reading if it has not passed the CAN write test
                 stat.main_mod.open()
         self.CAN.write(CANWrite.encode())
         for stat in self.stations:
+            # Perform the final verfication if device has not passed CAN test
             if stat.tempCANTest:
                 stat.tempCANTest = stat.finishCommunication()
                 stat.test_fail = stat.tempCANTest + stat.tempSerialTest
@@ -559,6 +577,8 @@ are labelled with both COM ports listed in config.txt\n \
         self.CAN.close()
         return localFail
 
+
+    ### Perform communication test e.g. round trip verifications between serial/CAN
     def testMessages(self):
         try:
             successes = []
@@ -566,6 +586,7 @@ are labelled with both COM ports listed in config.txt\n \
             failSerialToCAN = 1
             failCANToSerial = 1
             testCounter = 0
+            # Perform each test up to 5 times, stopping if all devices pass that test
             while testCounter < 5 and failSerialToCAN != 0:
                 failSerialToCAN = self.testSerialToCAN()
                 testCounter += 1
@@ -578,13 +599,14 @@ are labelled with both COM ports listed in config.txt\n \
                     addTextToLabel(stat.explanation, "\nSUCCESSFUL COMMUNICATION")
                 else:
                     addTextToLabel(stat.explanation, "\nFAILED COMMUNICATION")
-            completeIndSend.set(0)
         except serial.SerialException as e:
             for stat in self.stations:
                 getCOMProblem(e, stat)
                 stat.test_fail = 1
-            completeIndSend.set(0)
+        # Reset count of devices (triggers logging and resetting the device)
+        completeIndSend.set(0)
 
+    ### Checks how many devices have reached the point of a com test and acts accordingly
     def updateComVar(self, *args):
         complete = completeIndSend.get()
         if complete == len(self.stations):
