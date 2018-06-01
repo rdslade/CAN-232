@@ -6,6 +6,7 @@ from tkinter import IntVar, StringVar
 from time import sleep
 import serial
 import sys
+import os
 import time
 import datetime
 import threading
@@ -19,7 +20,6 @@ num_coms = 1
 master_transmit = slave_recieve = "221"
 master_recieve = slave_transmit = "1A1"
 baudrate = 115200
-advanced = 1
 
 ### class which details the specifics of each individual station programming
 ### threaded such that multiple Station instances can run simultaneously
@@ -100,7 +100,7 @@ class Station():
 
     ### Loads objects into correct places
     def packObjects(self):
-        if advanced:
+        if advanced.get():
             self.prog_label.pack(side = tk.LEFT)
             self.prog_entry.pack(side = tk.LEFT)
             self.out_label.pack(side = tk.LEFT)
@@ -108,7 +108,7 @@ class Station():
             self.prog.pack(pady = 5)
             self.out.pack()
 
-        if not advanced:
+        if not advanced.get():
             self.station_label.pack()
 
         self.setup.pack()
@@ -116,7 +116,7 @@ class Station():
         self.currentStatus.pack()
         self.progressBar.pack()
         self.explanation.pack()
-        if advanced:
+        if advanced.get():
             self.barrier.pack(fill = "x", expand = True)
             self.chooseLabel.pack()
             self.chooseProgramming.pack()
@@ -371,16 +371,39 @@ def getCOMProblem(e, stat):
     addTextToLabel(stat.explanation, "\nCould not open " + com_problem)
     return 1
 
+def getPermissions():
+    with open(r"Config\permissions.txt", 'r+', encoding = "utf-8") as per:
+        permissions = per.readline()
+        per.close()
+        if permissions == "advanced":
+            return 1
+        else:
+            return 0
+
+
+def changePermissions():
+    with open(r"Config\permissions.txt", "w+", encoding = "utf-8") as per:
+        if advanced.get():
+            per.write("production")
+        else:
+            per.write("advanced")
+        per.close()
+    python = sys.executable
+    os.execl(python, python, * sys.argv)
+
 ### high level applications which includes all relevant pieces and instances of
 ### Station class and other widgets
 class Application:
     def __init__(self, parent):
-        global loaded, devicesLoaded, long_len, completeIndSend
+        global loaded, devicesLoaded, long_len, completeIndSend, advanced
 
         self.communicationThread = threading.Thread(target = self.testMessages)
         completeIndSend = IntVar()
         completeIndSend.set(0)
         completeIndSend.trace('w', self.updateComVar)
+
+        advanced = IntVar()
+        advanced.set(getPermissions())
 
         loaded = IntVar()
         loaded.set(getNumDevicesLoaded())
@@ -407,13 +430,14 @@ are labelled with both COM ports listed in config.txt\n \
         self.can_com_text.trace("w", self.updateCommonPort)
         self.can_entry = tk.Entry(self.frame, width = entryWidth, textvariable = self.can_com_text)
         self.can_label = tk.Label(self.frame, text = "Shared CAN port: ")
-        if not advanced:
+        if not advanced.get():
             addTextToLabel(self.can_label, self.can_com_text.get())
         long_len = len(self.can_entry.get()) + len(self.can_label.cget("text"))
         devicesLoaded = tk.Label(self.frame, text = ("Devices Loaded: " + str(loaded.get())).ljust(long_len), pady = 10)
         self.buttonFrame = tk.Frame(self.frame)
         self.clearCounter = tk.Button(self.buttonFrame, text = "Clear Counter", width = int(long_len / 2), bg = gridColor, height = 2, command = clearDevCounter)
-        self.start = tk.Button(self.buttonFrame, text = "START", width = long_len, bg = gridColor, height = 3, command = self.startUpload)
+        self.start = tk.Button(self.buttonFrame, text = "START", width = 22, bg = gridColor, height = 3, command = self.startUpload)
+        self.changePermissions = tk.Button(self.buttonFrame, text = "Switch Advanced/Production", command = changePermissions, width = 22, bg = gridColor, height = 2)
         self.configureModeOptions()
         self.configureDeviceOptions()
         self.packObjects()
@@ -427,9 +451,10 @@ are labelled with both COM ports listed in config.txt\n \
         self.titleLabel.pack()
         self.instructions.pack()
         self.can_label.pack(side = tk.LEFT)
-        if advanced:
+        if advanced.get():
             self.can_entry.pack(side = tk.LEFT)
         self.deviceFrame.pack(side = tk.LEFT, padx = 10)
+        self.changePermissions.pack()
         self.clearCounter.pack(pady = 5)
         self.start.pack()
         self.buttonFrame.pack(side = tk.LEFT, padx = 20)
