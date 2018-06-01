@@ -182,14 +182,14 @@ class Station():
                 addTextToLabel(self.explanation, "\nSUCCESSFUL VERIFICATION")
                 return 0
         except serial.SerialException as e:
-            return self.getCOMProblem(e)
+            return getCOMProblem(e, self)
 
     def testMessages(self):
         try:
             self.main_mod = serial.Serial(self.out_com.get(), baudrate = 19200, timeout = .03)
         except serial.SerialException as e:
             completeIndSend.set(completeIndSend.get() + 1)
-            return self.getCOMProblem(e);
+            return getCOMProblem(e, self);
 
         self.main_mod.write("exit\r".encode()) #ensure this port is in correct mode for communication
         total = 0
@@ -211,12 +211,6 @@ class Station():
         else:
             addTextToLabel(self.explanation, "\nFAILED COMMUNICATION")
             return 1
-
-    ### Read the issue COM port and display status of that port
-    def getCOMProblem(self, e):
-        com_problem = re.findall(r'(?<=\').*?(?=\')', str(e))[0]
-        addTextToLabel(self.explanation, "Could not open " + com_problem)
-        return 1
 
     ### Organize and log status of each Station instance
     def log_run(self, flash, verify, comm):
@@ -350,6 +344,12 @@ def adjustStationNum(num):
         return "0" + str(num)
     else:
         return str(num)
+
+### Read the issue COM port and display status of that port
+def getCOMProblem(e, stat):
+    com_problem = re.findall(r'(?<=\').*?(?=\')', str(e))[0]
+    addTextToLabel(stat.explanation, "\nCould not open " + com_problem)
+    return 1
 
 ### high level applications which includes all relevant pieces and instances of
 ### Station class and other widgets
@@ -493,37 +493,43 @@ are labelled with both COM ports listed in config.txt\n \
                 stat.changeCommunicate(tk.DISABLED, c)
 
     def testMessages(self):
-        CAN = serial.Serial(self.can_com_text.get(), baudrate = 19200, timeout = .1)
-        successes = []
-        sleep(.2) #give ports time to leave boot mode
-        for stat in self.stations:
-            stat.testMessages()
-        message = readSerialWord(CAN)
-        CAN.close()
-        for stat in self.stations:
-            num_str = adjustStationNum(stat.station_num)
-            firstChar = str(hex(ord(num_str[0])))
-            secondChar = str(hex(ord(num_str[1])))
-            if firstChar[-2:] in message and secondChar[-2:] in message:
-                stat.test_fail = 0
+        try:
+            CAN = serial.Serial(self.can_com_text.get(), baudrate = 19200, timeout = .1)
+            successes = []
+            sleep(.2) #give ports time to leave boot mode
+            for stat in self.stations:
+                stat.testMessages()
+            message = readSerialWord(CAN)
+            CAN.close()
+            for stat in self.stations:
+                num_str = adjustStationNum(stat.station_num)
+                firstChar = str(hex(ord(num_str[0])))
+                secondChar = str(hex(ord(num_str[1])))
+                if firstChar[-2:] in message and secondChar[-2:] in message:
+                    stat.tempTest = 0
+                else:
+                    stat.tempTest = 1
+                    addTextToLabel(stat.explanation, "\nFailed read at CAN port")
+                stat.main_mod.flushInput()
+            CAN = serial.Serial(self.can_com_text.get(), baudrate = 19200, timeout = .1)
+            CANWrite = ":S"
+            if self.deviceType.get() == "master":
+                CANWrite += master_recieve + "N31;"
+            elif self.deviceType.get() == "slave":
+                CANWrite += slave_recieve + "N31;"
             else:
+                # Then device is configured normally
+                CANWrite += "123N00ABCD01;"
+            CAN.write(CANWrite.encode())
+            for stat in self.stations:
+                stat.test_fail = stat.finishCommunication() + stat.tempTest
+            CAN.close()
+            completeIndSend.set(0)
+        except serial.SerialException as e:
+            for stat in self.stations:
+                getCOMProblem(e, stat)
                 stat.test_fail = 1
-                addTextToLabel(stat.explanation, "\nFailed read at CAN port")
-            stat.main_mod.flushInput()
-        CAN = serial.Serial(self.can_com_text.get(), baudrate = 19200, timeout = .1)
-        CANWrite = ":S"
-        if self.deviceType.get() == "master":
-            CANWrite += master_recieve + "N31;"
-        elif self.deviceType.get() == "slave":
-            CANWrite += slave_recieve + "N31;"
-        else:
-            # Then device is configured normally
-            CANWrite += "123N00ABCD01;"
-        CAN.write(CANWrite.encode())
-        for stat in self.stations:
-            if not stat.test_fail:
-                stat.test_fail = stat.finishCommunication()
-        completeIndSend.set(0)
+                completeIndSend.set(0)
 
     def updateComVar(self, *args):
         complete = completeIndSend.get()
