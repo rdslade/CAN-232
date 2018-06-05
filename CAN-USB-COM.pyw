@@ -169,6 +169,8 @@ class Station():
         except subprocess.CalledProcessError as e:
             if "Unable to communicate".encode() in e.output:
                 self.explanation.configure(text = "\nCould not open " + self.prog_com.get())
+            if "Failed to autobaud".encode() in e.output:
+                self.explanation.configure(text = "\nFailed to autobaud")
             self.removeFromComList()
             return 1
 
@@ -198,7 +200,6 @@ class Station():
                     addTextToLabel(self.explanation, "\nTimed out waiting for button\nFAILED VERIFICATION")
                     return 1
 
-
             addTextToLabel(self.explanation, "\nButton Pressed\nVerifying Firmware Version")
             #Confirm version
             buttonSer.write("get version\r".encode())
@@ -210,7 +211,7 @@ class Station():
             buttonSer.write("exit\r".encode())
             #Clock Serial Port
             buttonSer.close()
-            if "APP=2.00A" not in self.version:
+            if "APP=2.01A" not in self.version:
                 addTextToLabel(self.explanation, "\n\nWRONG FIRMWARE VERSION")
                 return 1
             else:
@@ -297,20 +298,22 @@ class Station():
         # Configre text files signifying programming ports
         self.configureTextFiles()
         self.flash_fail = self.verify_fail = self.test_fail = 0
-        if self.program.get():
-            # Run programming
-            self.flash_fail = self.runFlashCommand()
-        if self.verify.get():
-            # Run version verification is successful
-            if not self.flash_fail:
-                self.verify_fail = self.performVerification()
-        if self.communicate.get():
-            # Run communication test if not failures
-            if not self.flash_fail and not self.verify_fail:
-                addTextToLabel(self.explanation, "\n\nWaiting")
-                completeIndSend.set(completeIndSend.get() + 1)
-
-
+        if self.program.get() or self.verify.get() or self.communicate.get():
+            if self.program.get():
+                # Run programming
+                self.flash_fail = self.runFlashCommand()
+            if self.verify.get():
+                # Run version verification is successful
+                if not self.flash_fail:
+                    self.verify_fail = self.performVerification()
+            if self.communicate.get():
+                # Run communication test if not failures
+                if not self.flash_fail and not self.verify_fail:
+                    addTextToLabel(self.explanation, "\n\nWaiting")
+                    completeIndSend.set(completeIndSend.get() + 1)
+        else:
+            self.removeFromComList()
+            self.currentStatus.configure(text = "Waiting")
 
     ### Restarts thread with new instantiation
     def createNewThread(self):
@@ -546,6 +549,8 @@ are labelled with both COM ports listed in config.txt\n \
     ### Trigger function for START button which begins/continues each Station thread
     def startUpload(self):
         for stat in self.stations:
+            if stat.main_mod.is_open:
+                stat.main_mod.close()
             if stat.communicate.get():
                 stations_with_com.append(stat)
             if not stat.thread.is_alive():
@@ -582,7 +587,14 @@ are labelled with both COM ports listed in config.txt\n \
             # Only perform the initial com test if the device has not already passed
             if stat.tempSerialTest:
                 localFail += stat.startCommunication()
-        message = readSerialWord(self.CAN)
+        try:
+            message = readSerialWord(self.CAN)
+        except UnicodeDecodeError as e:
+            for stat in stations_with_com:
+                addTextToLabel(stat.explanation, "\nWRONG CONFIGURATION")
+                stat.tempSerialTest = 1
+            self.CAN.close()
+            return -1
         self.CAN.close()
         for stat in stations_with_com:
             # Only check if the CAN read is successful if device has not already passed
@@ -618,7 +630,7 @@ are labelled with both COM ports listed in config.txt\n \
             # Device is configured normally
             CANWrite += "123N00ABCD01;"
         for stat in stations_with_com:
-            if stat.tempCANTest:
+            if stat.tempCANTest and not stat.main_mod.is_open:
                 # Open device port for reading if it has not passed the CAN write test
                 stat.main_mod.open()
         self.CAN.write(CANWrite.encode())
@@ -626,7 +638,7 @@ are labelled with both COM ports listed in config.txt\n \
             # Perform the final verfication if device has not passed CAN test
             if stat.tempCANTest:
                 stat.tempCANTest = stat.finishCommunication()
-                stat.test_fail = stat.tempCANTest + stat.tempSerialTest
+                stat.test_fail += stat.tempCANTest + stat.tempSerialTest
                 if stat.test_fail:
                     localFail += 1
         self.CAN.close()
@@ -642,11 +654,11 @@ are labelled with both COM ports listed in config.txt\n \
             failCANToSerial = 1
             testCounter = 0
             # Perform each test up to 5 times, stopping if all devices pass that test
-            while testCounter < 5 and failSerialToCAN != 0:
+            while testCounter < 5 and failSerialToCAN >= 0:
                 failSerialToCAN = self.testSerialToCAN()
                 testCounter += 1
             testCounter = 0
-            while testCounter < 5 and failCANToSerial != 0:
+            while testCounter < 5 and failCANToSerial >= 0:
                 failCANToSerial = self.testCANToSerial()
                 testCounter += 1
             for stat in stations_with_com:
@@ -670,7 +682,6 @@ are labelled with both COM ports listed in config.txt\n \
                 self.communicationThread = threading.Thread(target = self.testMessages)
                 self.communicationThread.start()
         elif complete == 0:
-            for stat in self.stations:
             # We have reset the variable and completed all testing
             # In this case, we must complete the cycle for each station
             for stat in self.stations:
