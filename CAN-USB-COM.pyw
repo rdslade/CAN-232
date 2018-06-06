@@ -66,6 +66,9 @@ class Station():
 
         self.statusSpace = tk.LabelFrame(self.frame, width = 200, height = 250)
         self.currentStatus = tk.Label(self.statusSpace, text = "", width = 25, pady = 10)
+
+        self.exit = tk.Button(self.statusSpace, text = "Stop Process", bg = gridColor, command = self.stopProcess)
+
         self.progressBar = ttk.Progressbar(self.statusSpace, mode = 'determinate', length = 125)
         self.explanation = tk.Label(self.statusSpace, text = "", width = 25, pady = 10)
         self.barrier = ttk.Separator(self.statusSpace)
@@ -76,6 +79,10 @@ class Station():
         self.chooseProgramming = tk.Checkbutton(self.statusSpace, text = "Program Module", variable = self.program)
         self.chooseVerify = tk.Checkbutton(self.statusSpace, text = "Verify Device Version", variable = self.verify)
         self.chooseCommunicate = tk.Checkbutton(self.statusSpace, text = "Test Device Communication", variable = self.communicate)
+
+    # TODO: write this functionality
+    def stopProcess(self):
+        print("TODO")
 
     ### Changes all checkboxes states to parameter
     def changeAllComponents(self, state_):
@@ -114,6 +121,7 @@ class Station():
         self.setup.pack()
         self.statusSpace.pack()
         self.currentStatus.pack()
+        self.exit.pack(pady = 5)
         self.progressBar.pack()
         self.explanation.pack()
         if advanced.get():
