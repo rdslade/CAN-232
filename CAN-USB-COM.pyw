@@ -168,9 +168,9 @@ class Station():
 
         except subprocess.CalledProcessError as e:
             if "Unable to communicate".encode() in e.output:
-                self.explanation.configure(text = "\nCould not open " + self.prog_com.get())
+                addTextToLabel(self.explanation, "\nCould not open " + self.prog_com.get())
             if "Failed to autobaud".encode() in e.output:
-                self.explanation.configure(text = "\nFailed to autobaud")
+                addTextToLabel(self.explanation, "\nFailed to autobaud")
             self.removeFromComList()
             return 1
 
@@ -550,8 +550,15 @@ are labelled with both COM ports listed in config.txt\n \
     ### Trigger function for START button which begins/continues each Station thread
     def startUpload(self):
         for stat in self.stations:
+            stat.explanation
             if stat.main_mod.is_open:
                 stat.main_mod.close()
+            try:
+                self.CAN
+                if self.CAN.is_open:
+                    self.CAN.close()
+            except AttributeError:
+                pass
             if stat.communicate.get():
                 stations_with_com.append(stat)
             if not stat.thread.is_alive():
