@@ -195,6 +195,7 @@ class Station():
                 self.simulateButtonPress(buttonSer)
                 buttonSer.write("\n\r".encode())
                 checkMode = readSerialWord(buttonSer)
+                # Wait at most 10 seconds for button press
                 if time.time() - startAttempt > 10:
                     self.removeFromComList()
                     addTextToLabel(self.explanation, "\nTimed out waiting for button\nFAILED VERIFICATION")
@@ -235,8 +236,6 @@ class Station():
         for i in range(0, num_coms):
             # Send initial serial message
             num_str = adjustStationNum(self.station_num)
-            #self.main_mod.flushOutput()
-            #self.main_mod.flushInput()
             self.main_mod.write(num_str.encode())
         self.main_mod.close()
         addTextToLabel(self.explanation, "\nWrote " + num_str + " to CAN")
@@ -254,6 +253,7 @@ class Station():
             return 1
 
     ### Organize and log status of each Station instance
+    # TODO: log errors correctly with serial number for identification
     def log_run(self, flash, verify, comm):
         # Only log is some sort of upload was attempted
         if not flash:
@@ -267,7 +267,7 @@ class Station():
             else:
                 log_str += "ERROR- "
                 if flash:
-                    log_str = "" #TODO
+                    log_str = ""
                 if verify:
                     log_str += "Verification "
                 if comm:
@@ -386,6 +386,7 @@ def adjustStationNum(num):
 
 ### Read the issue COM port and display status of that port
 def getCOMProblem(e, stat):
+     #RegEx to find all instances between '...' e.g. for COM port
     com_problem = re.findall(r'(?<=\').*?(?=\')', str(e))[0]
     addTextToLabel(stat.explanation, "\nCould not open " + com_problem)
     return 1
@@ -410,7 +411,7 @@ def changePermissions():
     python = sys.executable
     os.execl(python, python, * sys.argv)
 
-### high level applications which includes all relevant pieces and instances of
+### High level applications which includes all relevant pieces and instances of
 ### Station class and other widgets
 class Application:
     def __init__(self, parent):
