@@ -21,6 +21,13 @@ master_transmit = slave_recieve = "221"
 master_recieve = slave_transmit = "1A1"
 baudrate = 115200
 lock = threading.Lock()
+device = "GC-CAN-USB-COM"
+defaultFirmwareVersion = "APP=2.01A"
+masterFirmwareVersion = "APP=2.00A"
+slaveFirmwareVersion = "APP=2.00A"
+defaultFirmware = r"C:\Users\Julia\Desktop\GridConnect\LabUpdate\CAN-232\Release 2.01A\can-usb-rs232-2.01A.production.hex"
+masterFirmware = r"C:\Users\Julia\Desktop\GridConnect\LabUpdate\CAN-232\RaymondFirmware\raymond-production-2-00A-master.hex"
+slaveFirmware = r"C:\Users\Julia\Desktop\GridConnect\LabUpdate\CAN-232\RaymondFirmware\raymond-production-2-00A-slave.hex"
 ### class which details the specifics of each individual station programming
 ### threaded such that multiple Station instances can run simultaneously
 class Station():
@@ -46,7 +53,6 @@ class Station():
 
         self.can_com = can_com_
         self.mode = mode_
-        self.deviceType = "GC-CAN-USB-COM"
         self.frame = tk.Frame(self.parent)
         self.initComponents()
         self.packObjects()
@@ -140,16 +146,35 @@ class Station():
     ### Configures command text file
     def configureTextFiles(self):
         self.currentStatus.configure(text = "Configuring executables")
+        # Set up lines to write to file
+        line1 = "COM(xx, 115200)\n"
+        line2 = "DEVICE(LPC1756, 0.000000, 0)\n"
+        line3 = "HARDWARE(BOOTEXEC, 50, 100)\n"
+        line4 = "ERASE(DEVICE, PROTECTISP)\n"
+        line5 = "HEXFILE(xxxxx, NOCHECKSUMS, NOFILL, PROTECTISP)\n"
+        line6 = "VERIFY(xxxxx, NOCHECKSUMS)\n"
+        # Find where the port number is stored
+        prog_com_number = self.prog_com.get().split("COM")[1]
+        if(len(prog_com_number) == 1):
+            prog_com_number = '0'+prog_com_number
+        # Replace port number in correct line
+        line1 = line1.replace("xx", prog_com_number)
+        # Check for master/slave
+        type = deviceType.get()
+        if type == "master":
+            firmware = masterFirmware
+        elif type == "slave":
+            firmware = slaveFirmware
+        else:
+            firmware = defaultFirmware
+        # Replace the firmware in the lines to be written
+        line5 = line5.replace('xxxxx', firmware)
+        line6 = line6.replace('xxxxx', firmware)
+        # Write the custom lines to the correct file
         try:
             file_name = r'CANUSB_Config\CANUSB_CommandFile'+str(self.station_num)+'.txt'
-            with open(file_name, 'r+', encoding = 'utf-8') as command:
-                # Find where the port number is stored
-                command.seek(4)
-                prog_com_number = self.prog_com.get().split("COM")[1]
-                if(len(prog_com_number) == 1):
-                    prog_com_number = '0'+prog_com_number
-                # Write in the new (actual) port to be programmed
-                command.write(prog_com_number)
+            with open(file_name, 'w+', encoding = 'utf-8') as command:
+                command.write(line1 + line2 + line3 + line4 + line5 + line6)
         except FileIO:
             messagebox.showinfo("IOError", "Cannot open CANUSB_CommandFile.txt")
 
@@ -191,7 +216,14 @@ class Station():
             #Check button push / boot mode
             checkMode = "start"
             startAttempt = time.time()
-            while "#0#" not in checkMode:
+            type = deviceType.get()
+            bootCommand = ""
+            if type == "master":
+                bootCommand = "MASTER "
+            elif type == "slave":
+                bootCommand = "SLAVE "
+            bootCommand += "#0#"
+            while bootCommand not in checkMode:
                 self.simulateButtonPress(buttonSer)
                 buttonSer.write("\n\r".encode())
                 checkMode = readSerialWord(buttonSer)
@@ -212,7 +244,16 @@ class Station():
             buttonSer.write("exit\r".encode())
             #Clock Serial Port
             buttonSer.close()
-            if "APP=2.01A" not in self.version:
+            # Check for master/slave/default
+            type = deviceType.get()
+            if type == "master":
+                loadedFirmware = masterFirmwareVersion
+            elif type == "slave":
+                loadedFirmware = slaveFirmwareVersion
+            else:
+                loadedFirmware = defaultFirmwareVersion
+            # Check if the correct version was recieved from command
+            if loadedFirmware not in self.version:
                 addTextToLabel(self.explanation, "\n\nWRONG FIRMWARE VERSION")
                 return 1
             else:
@@ -243,7 +284,11 @@ class Station():
 
     ### Check CAN message and close serial port
     def finishCommunication(self):
-        recieve = readSerialWord(self.main_mod)
+        try:
+            recieve = readSerialWord(self.main_mod)
+        except serial.SerialException as e:
+            self.removeFromComList()
+            return getCOMProblem(e, self);
         self.main_mod.close()
         if "1" in recieve:
             addTextToLabel(self.explanation, "\nRead CAN Message (Success)")
@@ -258,7 +303,7 @@ class Station():
         # Only log is some sort of upload was attempted
         if not flash:
             full_date = str(datetime.datetime.now())
-            log_str = full_date + " " + self.sernum + " " + self.version + " " + self.deviceType + " "
+            log_str = full_date + " " + self.sernum + " " + self.version + " " + device + " "
             # No Failures
             if(not flash and not verify and not comm):
                 log_str += str(self.program.get()) + " " + str(self.verify.get()) + " " + str(self.communicate.get())
@@ -523,23 +568,24 @@ are labelled with both COM ports listed in config.txt\n \
 
     ### Create device types options and pack into frame
     def configureDeviceOptions(self):
+        global deviceType
         self.deviceFrame = tk.Frame(self.frame)
         CONFIGS = [
             ("Normal", "normal"),
             ("Master", "master"),
             ("Slave", "slave")
         ]
-        self.deviceType = StringVar()
-        self.deviceType.set("normal")
-        self.deviceType.trace("w", self.changeBaudRate)
+        deviceType = StringVar()
+        deviceType.set("normal")
+        deviceType.trace("w", self.changeBaudRate)
         for text, devType in CONFIGS:
-            b = tk.Radiobutton(self.deviceFrame, text = text, value = devType, variable = self.deviceType)
+            b = tk.Radiobutton(self.deviceFrame, text = text, value = devType, variable = deviceType)
             b.pack()
 
     ### Changes global baud rate depending on device type
     def changeBaudRate(self, *args):
-        global baudrate
-        type = self.deviceType.get()
+        global baudrate, deviceType
+        type = deviceType.get()
         if(type == "master" or type == "slave"):
             baudrate = 19200
         else:
@@ -550,7 +596,6 @@ are labelled with both COM ports listed in config.txt\n \
     ### Trigger function for START button which begins/continues each Station thread
     def startUpload(self):
         for stat in self.stations:
-            stat.explanation
             if stat.main_mod.is_open:
                 stat.main_mod.close()
             try:
@@ -630,9 +675,9 @@ are labelled with both COM ports listed in config.txt\n \
         CANWrite = ":S"
         # Must specify what kind of CAN write should be done since
         # applicable devices may be of specific type
-        if self.deviceType.get() == "master":
+        if deviceType.get() == "master":
             CANWrite += master_recieve + "N31;"
-        elif self.deviceType.get() == "slave":
+        elif deviceType.get() == "slave":
             CANWrite += slave_recieve + "N31;"
         else:
             # Device is configured normally
