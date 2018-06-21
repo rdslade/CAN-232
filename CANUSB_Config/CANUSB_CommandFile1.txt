@@ -1,6 +1,5 @@
-COM(33, 115200)
+COM(161, 115200)
 DEVICE(LPC1756, 0.000000, 0)
 HARDWARE(BOOTEXEC, 50, 100)
 ERASE(DEVICE, PROTECTISP)
 HEXFILE(C:\Users\Julia\Desktop\GridConnect\LabUpdate\CAN-232\RaymondFirmware\raymond-production-2-00A-master.hex, NOCHECKSUMS, NOFILL, PROTECTISP)
-VERIFY(C:\Users\Julia\Desktop\GridConnect\LabUpdate\CAN-232\RaymondFirmware\raymond-production-2-00A-master.hex, NOCHECKSUMS)

@@ -174,7 +174,7 @@ class Station():
         try:
             file_name = r'CANUSB_Config\CANUSB_CommandFile'+str(self.station_num)+'.txt'
             with open(file_name, 'w+', encoding = 'utf-8') as command:
-                command.write(line1 + line2 + line3 + line4 + line5 + line6)
+                command.write(line1 + line2 + line3 + line4 + line5)
         except FileIO:
             messagebox.showinfo("IOError", "Cannot open CANUSB_CommandFile.txt")
 
@@ -240,12 +240,21 @@ class Station():
             #Get Serial prog_com_number
             buttonSer.write("get sernum\r".encode())
             self.sernum = readSerialWord(buttonSer).split(':')[1].split('>')[0]
+            #Check to make sure in correct configuration
+            buttonSer.write("get can vc\r".encode())
+            currentConfig = readSerialWord(buttonSer).split('=STD')[1]
+            if bootCommand == "MASTER #0#" and "1A1" in currentConfig or bootCommand == "SLAVE #0#" and "221" in currentConfig:
+                #Wrong configuration loaded, so set to default config
+                buttonSer.write("default all\r".encode())
+                resetToDefault = ""
+                #Wait until default configuration has been reached
+                while "All profiles set to defaults" not in resetToDefault:
+                    resetToDefault = readSerialWord(buttonSer)
             #Exit boot mode
             buttonSer.write("exit\r".encode())
             #Clock Serial Port
             buttonSer.close()
             # Check for master/slave/default
-            type = deviceType.get()
             if type == "master":
                 loadedFirmware = masterFirmwareVersion
             elif type == "slave":
@@ -355,7 +364,9 @@ class Station():
                 # Run communication test if not failures
                 if not self.flash_fail and not self.verify_fail:
                     addTextToLabel(self.explanation, "\n\nWaiting")
+                    lock.acquire()
                     completeIndSend.set(completeIndSend.get() + 1)
+                    lock.release()
         else:
             self.removeFromComList()
             self.currentStatus.configure(text = "Waiting")
