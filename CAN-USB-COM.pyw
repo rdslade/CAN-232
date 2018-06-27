@@ -609,6 +609,7 @@ are labelled with both COM ports listed in config.txt\n \
 
     ### Trigger function for START button which begins/continues each Station thread
     def startUpload(self):
+        loaded.set(getNumDevicesLoaded())
         for stat in self.stations:
             if stat.main_mod.is_open:
                 stat.main_mod.close()
