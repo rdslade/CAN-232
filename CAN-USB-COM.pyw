@@ -571,10 +571,10 @@ are labelled with both COM ports listed in config.txt\n \
             ("Communicate All", "com"),
             ("Verify All", "v"),
             ("Program All", "p"),
-            ("Custom", "c")
+            #("Custom", "c")
         ]
         self.mode = StringVar()
-        self.mode.set("c")
+        self.mode.set("p")
         self.mode.trace("w", self.changeMode)
         for text, mode in MODES:
             b = tk.Radiobutton(self.modeFrame, text = text, value = mode, variable = self.mode)
@@ -585,12 +585,12 @@ are labelled with both COM ports listed in config.txt\n \
         global deviceType
         self.deviceFrame = tk.Frame(self.frame)
         CONFIGS = [
-            ("Normal", "normal"),
+            #("Normal", "normal"),
             ("Master", "master"),
             ("Slave", "slave")
         ]
         deviceType = StringVar()
-        deviceType.set("normal")
+        deviceType.set("master")
         deviceType.trace("w", self.changeBaudRate)
         for text, devType in CONFIGS:
             b = tk.Radiobutton(self.deviceFrame, text = text, value = devType, variable = deviceType)
