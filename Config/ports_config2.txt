@@ -1,0 +1,3 @@
+Programming_COM	Output_COM
+COM1 COM7
+COM1 COM3

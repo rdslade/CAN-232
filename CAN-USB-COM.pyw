@@ -393,9 +393,12 @@ def addTextToLabel(label, textToAdd):
 ### Read COM ports from config file and returned organized lists of ports
 def getCOMPorts():
     devices = []
+    port_file = 1
+    if len(sys.argv) == 2:
+        port_file = sys.argv[1]
     with open("Config\can_config.txt", 'r+', encoding = 'utf-8') as common:
         devices.append(common.readline().split()[0]) #first device is the common port
-    with open("Config\ports_config.txt", 'r+',encoding='utf-8' ) as mp:
+    with open("Config\ports_config" + str(port_file) + ".txt", 'r+',encoding='utf-8' ) as mp:
         mp.readline() #first line is instructions
         for line in mp.readlines():
             ports = []
