@@ -19,7 +19,7 @@ entryWidth = 8
 num_coms = 1
 master_transmit = slave_recieve = "221"
 master_recieve = slave_transmit = "1A1"
-baudrate = 115200
+baudrate = 19200
 lock = threading.Lock()
 device = "GC-CAN-USB-COM"
 defaultFirmwareVersion = "APP=2.01A"
@@ -585,7 +585,7 @@ are labelled with both COM ports listed in config.txt\n \
         global deviceType
         self.deviceFrame = tk.Frame(self.frame)
         CONFIGS = [
-            #("Normal", "normal"),
+            # ("Normal", "normal"),
             ("Master", "master"),
             ("Slave", "slave")
         ]
@@ -649,7 +649,7 @@ are labelled with both COM ports listed in config.txt\n \
 
     ### Repeatable procedure to begin the communication test
     def testSerialToCAN(self):
-        self.CAN = serial.Serial(self.can_com_text.get(), baudrate = baudrate, timeout = .1)
+        self.CAN = serial.Serial(self.can_com_text.get(), baudrate = 115200, timeout = .1)
         localFail = 0
         for stat in stations_with_com:
             # Only perform the initial com test if the device has not already passed
@@ -685,7 +685,7 @@ are labelled with both COM ports listed in config.txt\n \
 
     ### Repeatable procedure to end communication test
     def testCANToSerial(self):
-        self.CAN = serial.Serial(self.can_com_text.get(), baudrate = baudrate, timeout = .1)
+        self.CAN = serial.Serial(self.can_com_text.get(), baudrate = 115200, timeout = .1)
         localFail = 0
         CANWrite = ":S"
         # Must specify what kind of CAN write should be done since
