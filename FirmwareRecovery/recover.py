@@ -3,7 +3,9 @@ import time
 from xmodem import XMODEM, ACK
 import os
 import logging
+import re
 
+version = ""
 type = ""
 firmwareFiles = []
 startTime = 0
@@ -28,12 +30,14 @@ def pressButton(ser_port, command):
     ser_port.write(command.encode())
     time.sleep(1)
 
-def enterConfigMode(ser_port):
+def enterConfigMode(ser_port, verbose = True):
     global type
     startTime = time.time()
     response = ""
-    while response == "":
-        pressButton(ser, configCommand)
+    if verbose:
+        print("Entering config mode...")
+    while "#0#" not in response:
+        pressButton(ser_port, configCommand)
         ser_port.write("\n\r".encode())
         response = readSerialWord(ser_port)
         if time.time() - startTime > 10:
@@ -48,7 +52,6 @@ def enterConfigMode(ser_port):
 def getSerNum(ser_port):
     ser_port.write("get sernum\r".encode())
     sernumStr = readSerialWord(ser_port)
-
     sernumArr = sernumStr.split()
     startIndex = 9999
     endIndex = 9999
@@ -70,11 +73,17 @@ def getSerNum(ser_port):
     sernumActual[0] = adjustedBegin
     sernumActual[len(sernumActual) - 1] = adjustedEnd
 
+    sernumStr = ""
+    for portion in sernumActual:
+        sernumStr += str(portion)
+    print("Serial number: " + sernumStr + " [" + type + "]")
     return sernumActual
 
 
-def exitConfigMode(ser_port):
+def exitConfigMode(ser_port, verbose = True):
     ser_port.write("exit\r".encode())
+    if verbose:
+        print("\nExited config mode")
 
 def readUntil(char = None):
     def serialPortReader():
@@ -99,33 +108,68 @@ def setupDownload(ser_port, numArr):
         pot += str(num) + " "
     pot += "\r\n"
     readyResponse = ""
+    print("\nConfiguring for XMODEM transfer...")
     while "Start XMODEM send" not in readyResponse:
         ser_port.write(pot.encode())
         readyResponse = readSerialWord(ser_port)
     # readUntil(ACK)
-    ser_port.baudrate = 115200
+    print("Ready for XMODEM send")
     #print("PLEASE CYCLE POWER TO THE MODULE")
+def getVersionNumber(filename):
+    fileNameArr = filename.split("-")
+    for i in range(0, len(fileNameArr)):
+        try:
+            int(fileNameArr[i])
+            v = fileNameArr[i] + "." + fileNameArr[i + 1]
+            return v
+        except:
+            pass
 
 def performDownload(ser_port):
-    global type
+    global type, version
     modem = XMODEM(getc, putc)
     modem.log.disabled = True
 
     for file in firmwareFiles:
         if type in file:
             filename = file
+            version = getVersionNumber(filename)
+            if not re.match(r"\d{1,}[.]\d{1,}[A-z]", version):
+                exitWithMessage("CAN'T DETERMINE VERSION FROM FILE NAME")
 
     f = open(filename, 'rb')
     # readyResponse = ""
     # while "Begin XMODEM download now" not in readyResponse:
     #     ser_port.write(" ".encode())
     #     readyResponse = readSerialWord(ser_port)
-    print("\nLoading firmware...")
     success = False
     while not success:
+        print("\nLoading firmware...")
         success = modem.send(f, quiet = 1)
     print("Successful load!")
     modem.log.disabled = False
+
+def checkVersion(ser_port):
+    print("\nVerifying firmware...")
+    enterConfigMode(ser_port, verbose = False)
+    ser_port.write("get version\r".encode())
+    response = ""
+    str = "Version "
+    while response == "":
+        response = readSerialWord(ser_port)
+    if version in response:
+        str += version + " loaded with "
+    else:
+        exitWithMessage("WRONG VERSION LOADED")
+    ser_port.write("\r\n".encode())
+    response = readSerialWord(ser_port)
+    if type.upper() in response:
+        str += type + " configuration"
+        print(str)
+    else:
+        exitWithMessage("WRONG CONFIGURATION LOADED")
+    exitConfigMode(ser_port, verbose = False)
+
 
 def checkFirmwareFiles():
     os.chdir("Firmware")
@@ -134,32 +178,33 @@ def checkFirmwareFiles():
         exitWithMessage("TOO MANY FIRMWARE FILES")
     return firmwareFiles
 
+def setBaudFlush(ser_port, baud):
+    ser_port.flush()
+    ser_port.baudrate = baud
+
 if __name__ == "__main__":
-    startTime = time.time()
     com = input("Enter the COM port: ")
-    # mode = sys.argv[1]
-    # if mode == "normal":
-    #     baud = 115200
-    #     configCommand = ":CONFIG;"
-    # elif mode == "raymond":
-    baud = 19200
     configCommand = "!!!"
     try:
-        ser = serial.Serial(com, baudrate = baud, timeout = .1)
+        ser = serial.Serial(com, baudrate = 19200, timeout = .1)
     except serial.SerialException as e:
         exitWithMessage("SERIAL ERROR: COULD NOT OPEN '" + com + "'")
     firmwareFiles = checkFirmwareFiles()
-    try:
+
+    again = "Y"
+    counter = 0
+    while again in ["Y", "y", "yes", "Yes"]:
+        counter += 1
+        print("\nModule " + str(counter))
+        startTime = time.time()
+        setBaudFlush(ser, 19200)
         enterConfigMode(ser)
-    except:
-        enterConfigMode(ser)
-    sernum = getSerNum(ser)
-    setupDownload(ser, sernum)
-    performDownload(ser)
-    # statinfo = os.stat(r"Firmware\raymond-download-2-00C-" + type + ".image")
-    # print(statinfo.st_size)
-    # if time.time() - startTime < 15:
-    #     performDownload(ser)
-    exitConfigMode(ser)
-    print("\nSuccessful program completed in " + str(round(time.time() - startTime, 2)) + " seconds")
-    x = input("\nPress enter to exit")
+        sernum = getSerNum(ser)
+        setupDownload(ser, sernum)
+        setBaudFlush(ser, 115200)
+        performDownload(ser)
+        time.sleep(2)
+        setBaudFlush(ser, 19200)
+        checkVersion(ser) # NOT NEEDED/WORKING YET
+        print("\nSuccessful program completed in " + str(round(time.time() - startTime, 2)) + " seconds")
+        again = input("\nLoad another? (Y or N): ")
