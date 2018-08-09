@@ -1,6 +1,18 @@
 This document will discuss and explain parts of Python (and project details in general) that are important to know in order to recreate other similar scripts as well as understanding the organization of this one.
 
-# Modularization and the main function
+# Before you read
+
+Before you read about the specifics of this program (and others similar to it), you first should be up to date with the syntax and conecpts of Python and specifically the tkinter module. The following are links that may be helpful in learning the basics through some more complex topics.
+
+[learnpython.org](http://learnpython.org/) is a great resource for getting used to Python syntax and semantics. It has an interactive shell where you can practice your own code and check answers to coding problems. This website can give you a strong base in the fundamentals of Python, but in my opinion falls a bit short at more complex topics such as object orientation. 
+
+[realpython.com](https://realpython.com/python3-object-oriented-programming/) has a great page on object orientation in Python. While there are not many chances to practice on your own, this website has many details to help get you started understanding Python class structure.
+
+[pythonprogramming.net](https://pythonprogramming.net/python-3-tkinter-basics-tutorial/) provides a nice intro into tkinter. The video provides an overview of the topic as well as the basics of creating your displays.
+
+[tutorialspoint.com](https://www.tutorialspoint.com/python/python_gui_programming.htm) has a great list of the tkinter widgets with short descriptions of what each one is, what they are used for, and how to implement them.
+
+# CAN-232 Python Programmer Details
 
 ## Main function format
 
