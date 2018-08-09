@@ -1,6 +1,8 @@
 # CAN-232
 Multistage programming and testing for Grid Connect RS232 CAN Converter
 
+[Link](https://github.com/rdslade/CAN-232/blob/master/howto.MD) to details on code organization and important Python features.
+
 ## Installation
 ### Using git clone
 ```
