@@ -1,5 +1,7 @@
 This document will discuss and explain parts of Python (and project details in general) that are important to know in order to recreate other similar scripts as well as understanding the organization of this one.
 
+[Link](https://rdslade.github.io/CAN-232) to CAN-232 homepage
+
 # Before you read
 
 Before you read about the specifics of this program (and others similar to it), you first should be up to date with the syntax and conecpts of Python and specifically the tkinter module. The following are links that may be helpful in learning the basics through some more complex topics.
