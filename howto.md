@@ -16,6 +16,15 @@ Before you read about the specifics of this program (and others similar to it), 
 
 # CAN-232 Python Programmer Details
 
+## Importing libraries
+At the top of the program, we import many libraries that we will be using throughout the script. I will highlight the most important ones.
+
+* [`subprocess`](https://docs.python.org/3/library/subprocess.html) is a library that allows one to create new processes, manage process flow, and obtain return codes from processing external to the script it is running from
+* tkinter has a lot of information below
+* [`serial`](https://pythonhosted.org/pyserial/) comes from pySerial which provides a layer of abstraction to open and handle serial ports on your machine
+* [`threading`](https://docs.python.org/2/library/threading.html) provides an interface to perform actions using multithreading techniques
+* [`re`](https://docs.python.org/3/library/re.html) is a regular expressions library. While it is only used once in this script, I wanted to be clear on what the library was an mention that it is a very useful one to use
+
 ## Main function format
 
 As with any other programming languages, the `main` function should try to be kept short. Putting our code in chunks of modules, we can reduce the amount of code in `main` and reuse much of the code. Here is the main function in it's entirety:
@@ -28,7 +37,7 @@ if __name__ == "__main__":
     root.mainloop()
 ```
 
-In Python, there is no explicit `main` function. Instead when a script is run, all level 0 indentation is run as the `main` function. When the script is being run explictly, the formatting of `if __name__ == "__main__":` is unnecessary because the level 0 indentation will be run automatically. However, if we want to import a script into another, we may not want the main function of the imported script to interrupt or replace the main function of the desired script. For this reason, Python sets a special variable called `__name__` to `"__main__"` for the script that was called at the highest level. We can put our main functionality in the level of indentation directly below this equality check.
+In Python, there is no explicit `main` function. Instead when a script is run, all level 0 indentation is run as the `main` function. When the script is being run explictly (through command line or any other way of exactly specifying that we are running this script), the formatting of `if __name__ == "__main__":` is unnecessary because the level 0 indentation will be run automatically. However, if we want to import a script into another, we may not want the main function of the imported script to interrupt or replace the main function of the desired script. For this reason, Python sets a special variable called `__name__` to `"__main__"` for the script that was called at the highest level. We can put our main functionality in the level of indentation directly below this equality check.
 
 ## Important custom modules
 Let's break down what the pieces of the `main` function are.
@@ -102,7 +111,7 @@ Piece by piece of this excerpt:
 In order to fully understand this, we need to discuss the `Station` class
 
 ## Station class
-For many of the lab updating scripts, we want the main operation to be repeatable. For that reason, I often implemented a sepearte class handling all actions that should be reproducable. This allows for an easy way to instantiate multiple instances of the class. In the above example, we create a a `Station` using the ports specfied in the `devices` array, the CAN port it will be talking with, as well as a unique number to differentiate between each station (which is important in the communcation stage of the program). Each `Station` is added to an array tracking all of the Stations being programmed.
+For many of the lab updating scripts, we want the main operation to be repeatable. For that reason, I often implemented a sepearte class handling all actions that should be reproducable. This allows for an easy way to instantiate multiple instances of the class (hence seperate 'stations' where the programming happens). In the above example, we create a a `Station` using the ports specfied in the `devices` array, the CAN port it will be talking with, as well as a unique number to differentiate between each station (which is important in the communcation stage of the program). Each `Station` is added to an array tracking all of the Stations being programmed.
 
 A closer look at the `Station` class will reveal many of the details seen in the functionality of the program.
 
@@ -116,7 +125,7 @@ This is saying that each Station has it's own thread that targets an action call
 
 Next, there are some parts of this class that are data to be collected at some point through out the process. These include the serial number of the module (`self.sernum`), the version of the firmware that is being loaded (`self.version`), as well as failure indicators that are set after steps are performed.
 
-Next, each of the ports specified by the parameters must be set up. The main serial port gets initialized as a Serial port which is imported through use of the pySerial library. 
+Next, each of the ports specified by the parameters must be set up. The main serial port gets initialized as a `Serial` port which is imported through use of the pySerial library. 
 
 Following this, we specify the tkinter widgets we need to display each Station's status, progress, and debug information. In a similar fasion to the Application class, this part of the process has it's own initialization and display steps.
 
