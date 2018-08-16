@@ -93,8 +93,8 @@ The most important aspect of this class is the last two lines of the ctor.
 
 Piece by piece of this excerpt:
 
-* `devices` is an array of arrays with the inner arrays detailing the COM ports (programming and serial communication) for each device to be programmed
-* `devices[0]` is the common CAN communication port
+* `devices` is a list of lists with the inner list detailing the COM ports (programming and serial communication) for each device to be programmed
+* `devices[0]` is the common CAN communication port (*Note: Python lists can hold data of different types so `devices[0]` is a string but the rest of the items in `devices` are a list of strings*)
 * `self.mode` is part of a feature that is not fully implemented; specifies whether program is in production or simple mode
 
 In order to fully understand this, we need to discuss the `Station` class
