@@ -1,2 +1,2 @@
 Programming_COM	Output_COM
-COM34 COM24
+COM5 COM99

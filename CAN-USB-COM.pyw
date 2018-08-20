@@ -25,9 +25,11 @@ device = "GC-CAN-USB-COM"
 defaultFirmwareVersion = "APP=2.01A"
 masterFirmwareVersion = "APP=2.00A"
 slaveFirmwareVersion = "APP=2.00A"
-defaultFirmware = r"C:\Users\Julia\Desktop\GridConnect\LabUpdate\CAN-232\Release 2.01A\can-usb-rs232-2.01A.production.hex"
-masterFirmware = r"C:\Users\Julia\Desktop\GridConnect\LabUpdate\CAN-232\RaymondFirmware\raymond-production-2-00A-master.hex"
-slaveFirmware = r"C:\Users\Julia\Desktop\GridConnect\LabUpdate\CAN-232\RaymondFirmware\raymond-production-2-00A-slave.hex"
+cwd = os.getcwd()
+subprocess.check_output("py setupFlash.py")
+defaultFirmware = cwd + r"\Release 2.01A\can-usb-rs232-2.01A.production.hex"
+masterFirmware = cwd + r"\RaymondFirmware\raymond-production-2-00A-master.hex"
+slaveFirmware = cwd + r"\RaymondFirmware\raymond-production-2-00A-slave.hex"
 ### class which details the specifics of each individual station programming
 ### threaded such that multiple Station instances can run simultaneously
 class Station():
@@ -571,10 +573,10 @@ are labelled with both COM ports listed in config.txt\n \
             ("Communicate All", "com"),
             ("Verify All", "v"),
             ("Program All", "p"),
-            #("Custom", "c")
+            ("Custom", "c")
         ]
         self.mode = StringVar()
-        self.mode.set("p")
+        self.mode.set("c")
         self.mode.trace("w", self.changeMode)
         for text, mode in MODES:
             b = tk.Radiobutton(self.modeFrame, text = text, value = mode, variable = self.mode)
@@ -585,12 +587,12 @@ are labelled with both COM ports listed in config.txt\n \
         global deviceType
         self.deviceFrame = tk.Frame(self.frame)
         CONFIGS = [
-            # ("Normal", "normal"),
+            ("Normal", "normal"),
             ("Master", "master"),
             ("Slave", "slave")
         ]
         deviceType = StringVar()
-        deviceType.set("master")
+        deviceType.set("normal")
         deviceType.trace("w", self.changeBaudRate)
         for text, devType in CONFIGS:
             b = tk.Radiobutton(self.deviceFrame, text = text, value = devType, variable = deviceType)
