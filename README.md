@@ -19,9 +19,19 @@ This part of the program can be run in multiple 'modes' determined by the user a
 
 ### Layout of the Config directory
 `can_config.txt`: Single line consisting of the COM port where the command CAN signal is located
+> Example of `Config\can_config.txt`
+> ```
+> COM25
+> ```
 
 `permissions.txt`: Determines the mode (production vs advanced) in which the program runs
+  
   **NOTE: currently issues with production mode*
+
+> Example of `Config\permissions.txt`
+> ```
+> advanced
+> ```
   
  `ports_config[n].txt`: *Each text file includes the following*-
  
@@ -30,6 +40,13 @@ This part of the program can be run in multiple 'modes' determined by the user a
     * A programming port through which the USB232 is plugged in
     * A serial port through which the main serial communcation port of the device being programmed is plugged in
     
+> Example of `Config\ports_config1.txt`
+> ```
+> Programming_COM	Output_COM
+> COM12 COM7
+> COM13 COM3
+> ```
+
 ## How to run
 The CAN-USB-COM.pyw is called with a command line argument specifying which ports_config text file to use when initializing the graphics window. Each command line call to start the program opens a single window. 
 
