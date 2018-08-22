@@ -19,9 +19,9 @@ entryWidth = 8
 num_coms = 1
 master_transmit = slave_recieve = "221"
 master_recieve = slave_transmit = "1A1"
-baudrate = 19200
+baudrate = 115200
 lock = threading.Lock()
-device = "GC-CAN-USB-COM"
+device = "GC-CAN-M-RS232"
 defaultFirmwareVersion = "APP=2.01A"
 masterFirmwareVersion = "APP=2.00A"
 slaveFirmwareVersion = "APP=2.00A"
@@ -204,7 +204,7 @@ class Station():
     ### Used to put the device at the parameter port in to bootloader mode
     def simulateButtonPress(self, port):
         time.sleep(1)
-        port.write("!!!".encode())
+        port.write(":CONFIG;".encode())
         time.sleep(1)
 
     ### Check version number of firmware to make sure device was correctly programmed
@@ -242,16 +242,14 @@ class Station():
             #Get Serial prog_com_number
             buttonSer.write("get sernum\r".encode())
             self.sernum = readSerialWord(buttonSer).split(':')[1].split('>')[0]
-            #Check to make sure in correct configuration
-            buttonSer.write("get can vc\r".encode())
-            currentConfig = readSerialWord(buttonSer).split('=STD')[1]
-            if bootCommand == "MASTER #0#" and "1A1" in currentConfig or bootCommand == "SLAVE #0#" and "221" in currentConfig:
-                #Wrong configuration loaded, so set to default config
-                buttonSer.write("default all\r".encode())
-                resetToDefault = ""
-                #Wait until default configuration has been reached
-                while "All profiles set to defaults" not in resetToDefault:
-                    resetToDefault = readSerialWord(buttonSer)
+
+            #Reset configuration
+            buttonSer.write("default all\r".encode())
+            resetToDefault = ""
+            #Wait until default configuration has been reached
+            while "All profiles set to defaults" not in resetToDefault:
+                resetToDefault = readSerialWord(buttonSer)
+                
             #Exit boot mode
             buttonSer.write("exit\r".encode())
             #Clock Serial Port
@@ -285,12 +283,18 @@ class Station():
             return getCOMProblem(e, self);
 
         self.main_mod.write("exit\r".encode()) #ensure this port is in correct mode for communication
-        for i in range(0, num_coms):
-            # Send initial serial message
-            num_str = adjustStationNum(self.station_num)
-            self.main_mod.write(num_str.encode())
+
+        for stat in stations_with_com:
+            if stat.tempCANTest and not stat.main_mod.is_open:
+                # Open device port for reading if it has not passed the CAN write test
+                stat.main_mod.open()
+        write = ":S123N00ABCD" + adjustStationNum(self.station_num) + ";"
+        self.main_mod.write(write.encode())
+
+            
+            ###### self.main_mod.write(num_str.encode())
         self.main_mod.close()
-        addTextToLabel(self.explanation, "\nWrote " + num_str + " to CAN")
+        addTextToLabel(self.explanation, "\nWrote " + "01" + " to CAN")
         return 0
 
     ### Check CAN message and close serial port
@@ -301,7 +305,9 @@ class Station():
             self.removeFromComList()
             return getCOMProblem(e, self);
         self.main_mod.close()
-        if "1" in recieve:
+
+        # if the sent message appears in the recieved message then success
+        if "1" in recieve[-2:]:
             addTextToLabel(self.explanation, "\nRead CAN Message (Success)")
             return 0
         else:
@@ -309,7 +315,6 @@ class Station():
             return 1
 
     ### Organize and log status of each Station instance
-    # TODO: log errors correctly with serial number for identification
     def log_run(self, flash, verify, comm):
         # Only log is some sort of upload was attempted
         if not flash:
@@ -587,9 +592,9 @@ are labelled with both COM ports listed in config.txt\n \
         global deviceType
         self.deviceFrame = tk.Frame(self.frame)
         CONFIGS = [
-            ("Normal", "normal"),
-            ("Master", "master"),
-            ("Slave", "slave")
+            #("Normal", "normal"),
+            #("Master", "master"),
+            #("Slave", "slave")
         ]
         deviceType = StringVar()
         deviceType.set("normal")
@@ -670,11 +675,8 @@ are labelled with both COM ports listed in config.txt\n \
             # Only check if the CAN read is successful if device has not already passed
             if stat.tempSerialTest:
                 num_str = adjustStationNum(stat.station_num)
-                # Hex string representing each char from the station id
-                firstChar = str(hex(ord(num_str[0])))
-                secondChar = str(hex(ord(num_str[1])))
-                # Check to see if each station id appears in message sent
-                if firstChar[-2:] in message and secondChar[-2:] in message:
+                # Check to see if each station id appears in end of message sent
+                if num_str in message[-3:]:
                     # Device DID NOT fail if successful CAN read
                     stat.tempSerialTest = 0
                     addTextToLabel(stat.explanation, " (Success)")
