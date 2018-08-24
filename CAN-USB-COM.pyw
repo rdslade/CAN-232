@@ -21,7 +21,6 @@ master_transmit = slave_recieve = "221"
 master_recieve = slave_transmit = "1A1"
 baudrate = 115200
 lock = threading.Lock()
-device = "GC-CAN-M-RS232"
 defaultFirmwareVersion = "APP=2.01A"
 masterFirmwareVersion = "APP=2.00A"
 slaveFirmwareVersion = "APP=2.00A"
@@ -319,7 +318,7 @@ class Station():
         # Only log is some sort of upload was attempted
         if not flash:
             full_date = str(datetime.datetime.now())
-            log_str = full_date + " " + self.sernum + " " + self.version + " " + device + " "
+            log_str = full_date + " " + self.sernum + " " + self.version + " " + partNum.get() + " "
             # No Failures
             if(not flash and not verify and not comm):
                 log_str += str(self.program.get()) + " " + str(self.verify.get()) + " " + str(self.communicate.get())
@@ -481,7 +480,7 @@ def changePermissions():
 ### Station class and other widgets
 class Application:
     def __init__(self, parent):
-        global loaded, devicesLoaded, long_len, completeIndSend, advanced, stations_with_com
+        global loaded, devicesLoaded, partNum, long_len, completeIndSend, advanced, stations_with_com
 
         self.communicationThread = threading.Thread(target = self.testMessages)
         completeIndSend = IntVar()
@@ -515,12 +514,18 @@ are labelled with both COM ports listed in config.txt\n \
         self.can_com_text = StringVar()
         self.can_com_text.set(devices[0])
         self.can_com_text.trace("w", self.updateCommonPort)
-        self.can_entry = tk.Entry(self.frame, width = entryWidth, textvariable = self.can_com_text)
-        self.can_label = tk.Label(self.frame, text = "Shared CAN port: ")
+        self.can_config_frame = tk.Frame(self.frame)
+        self.can_entry = tk.Entry(self.can_config_frame, width = entryWidth, textvariable = self.can_com_text)
+        self.can_label = tk.Label(self.can_config_frame, text = "Shared CAN port:")
         if not advanced.get():
             addTextToLabel(self.can_label, self.can_com_text.get())
         long_len = len(self.can_entry.get()) + len(self.can_label.cget("text"))
         devicesLoaded = tk.Label(self.frame, text = ("Devices Loaded: " + str(loaded.get())).ljust(long_len), pady = 10)
+        partNum = StringVar()
+        partNum.set("GC-CAN-M-RS232")
+        self.part_num_frame = tk.Frame(self.frame)
+        self.partNumLabel = tk.Label(self.part_num_frame, text = "Part Number (for logging):")
+        self.partNumEntry = tk.Entry(self.part_num_frame, textvariable=partNum)
         self.buttonFrame = tk.Frame(self.frame)
         self.clearCounter = tk.Button(self.buttonFrame, text = "Clear Counter", width = int(long_len / 2), bg = gridColor, height = 2, command = clearDevCounter)
         self.start = tk.Button(self.buttonFrame, text = "START", width = 22, bg = gridColor, height = 3, command = self.startUpload)
@@ -537,15 +542,19 @@ are labelled with both COM ports listed in config.txt\n \
         self.frame.pack(side = tk.TOP)
         self.titleLabel.pack()
         self.instructions.pack()
-        self.can_label.pack(side = tk.LEFT)
+        self.can_label.pack()
         if advanced.get():
-            self.can_entry.pack(side = tk.LEFT)
+            self.can_entry.pack()
+        self.can_config_frame.pack(side = tk.LEFT)
         self.deviceFrame.pack(side = tk.LEFT, padx = 10)
         self.changePermissions.pack()
         self.clearCounter.pack(pady = 5)
         self.start.pack()
         self.buttonFrame.pack(side = tk.LEFT, padx = 20)
         devicesLoaded.pack(side = tk.RIGHT)
+        self.partNumLabel.pack()
+        self.partNumEntry.pack()
+        self.part_num_frame.pack(side = tk.RIGHT, padx = 15)
         self.modeFrame.pack(padx =10)
 
 
